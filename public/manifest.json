@@ -1,0 +1,42 @@
+{
+  "name": "HorariCoop",
+  "short_name": "HorariCoop",
+  "description": "Control horari per a escola cooperativa",
+  "start_url": "/app",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#2563eb",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/icons/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["productivity", "business"],
+  "shortcuts": [
+    {
+      "name": "Fitxar entrada",
+      "url": "/app?quick_action=clock_in",
+      "description": "Fitxar entrada ràpidament"
+    },
+    {
+      "name": "Historial",
+      "url": "/app/historial",
+      "description": "Veure historial de fitxatges"
+    },
+    {
+      "name": "Informes",
+      "url": "/app/informes",
+      "description": "Veure informes"
+    }
+  ]
+}
