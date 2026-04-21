@@ -59,8 +59,6 @@ export function ReportsGeoMapButton({ userSnapshots }: ReportsGeoMapButtonProps)
     return { points: pts, userColors: colors };
   }, [userSnapshots]);
 
-  if (points.length === 0) return null;
-
   return (
     <>
       <button
@@ -86,7 +84,9 @@ export function ReportsGeoMapButton({ userSnapshots }: ReportsGeoMapButtonProps)
           <div className="text-left">
             <p className="font-semibold text-ink">Mapa de fitxatges</p>
             <p className="mt-0.5 text-sm text-ink/60">
-              {points.length} punts geolocalitzats en el període seleccionat
+              {points.length > 0
+                ? `${points.length} punts geolocalitzats en el període seleccionat`
+                : "Sense fitxatges geolocalitzats en el període seleccionat"}
             </p>
           </div>
         </div>
@@ -189,9 +189,23 @@ function GeoMapModal({ points, userColors, userSnapshots, onClose }: GeoMapModal
           </div>
         </div>
 
-        {/* Map */}
+        {/* Map or empty state */}
         <div className="flex-1 overflow-hidden">
-          <ReportsGeoMap points={points} userColors={userColors} />
+          {points.length > 0 ? (
+            <ReportsGeoMap points={points} userColors={userColors} />
+          ) : (
+            <div className="flex h-full flex-col items-center justify-center gap-3 p-8 text-center">
+              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-mist">
+                <svg className="h-8 w-8 text-ink/30" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                </svg>
+              </div>
+              <p className="font-semibold text-ink">Sense dades de geolocalització</p>
+              <p className="max-w-sm text-sm text-ink/60">
+                Cap fitxatge del període seleccionat té coordenades GPS. Les ubicacions es registren a partir dels fitxatges realitzats amb la versió actualitzada de l&apos;aplicació.
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Mobile legend */}
