@@ -9,7 +9,7 @@ type TeamMemberStatus = {
   id: string;
   name: string;
   email: string;
-  status: "clocked_in" | "clocked_out" | "on_break" | "absent";
+  status: "clocked_in" | "clocked_out" | "finished" | "on_break" | "absent";
   clockInTime: string | null;
   clockOutTime: string | null;
   absenceType: "sick" | "personal" | "other" | null;
@@ -26,6 +26,8 @@ function getStatusLabel(status: TeamMemberStatus["status"]): string {
       return "Treballant";
     case "clocked_out":
       return "No ha fitxat";
+    case "finished":
+      return "Jornada acabada";
     case "on_break":
       return "En pausa";
     case "absent":
@@ -41,6 +43,8 @@ function getStatusTone(status: TeamMemberStatus["status"]) {
       return "success" as const;
     case "clocked_out":
       return "danger" as const;
+    case "finished":
+      return "brand" as const;
     case "on_break":
       return "pause" as const;
     case "absent":
@@ -73,6 +77,7 @@ export function TeamDashboard({ members }: TeamDashboardProps) {
     total: members.length,
     clockedIn: members.filter((m) => m.status === "clocked_in").length,
     clockedOut: members.filter((m) => m.status === "clocked_out").length,
+    finished: members.filter((m) => m.status === "finished").length,
     onBreak: members.filter((m) => m.status === "on_break").length,
     absent: members.filter((m) => m.status === "absent").length
   };
@@ -88,7 +93,7 @@ export function TeamDashboard({ members }: TeamDashboardProps) {
           Vista general de tots els treballadors del dia d&apos;avui.
         </p>
 
-        <div className="mt-6 grid gap-3 sm:grid-cols-5">
+        <div className="mt-6 grid gap-3 sm:grid-cols-6">
           <button
             onClick={() => setFilter("all")}
             className={`rounded-2xl border px-4 py-3 text-left transition ${
@@ -134,6 +139,22 @@ export function TeamDashboard({ members }: TeamDashboardProps) {
             </p>
             <p className="mt-1 text-2xl font-semibold text-danger">
               {stats.clockedOut}
+            </p>
+          </button>
+
+          <button
+            onClick={() => setFilter("finished")}
+            className={`rounded-2xl border px-4 py-3 text-left transition ${
+              filter === "finished"
+                ? "border-brand/20 bg-brand-soft/70"
+                : "border-line/80 bg-white hover:bg-mist/50"
+            }`}
+          >
+            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-ink/60">
+              Acabada
+            </p>
+            <p className="mt-1 text-2xl font-semibold text-brand-strong">
+              {stats.finished}
             </p>
           </button>
 
@@ -189,9 +210,11 @@ export function TeamDashboard({ members }: TeamDashboardProps) {
                         ? "bg-success"
                         : member.status === "clocked_out"
                           ? "bg-danger"
-                          : member.status === "on_break"
-                            ? "bg-pause"
-                            : "bg-line"
+                          : member.status === "finished"
+                            ? "bg-brand"
+                            : member.status === "on_break"
+                              ? "bg-pause"
+                              : "bg-line"
                     }`}
                   />
                   <div>

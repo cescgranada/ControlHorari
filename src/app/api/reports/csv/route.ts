@@ -1,3 +1,6 @@
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 import { NextRequest } from "next/server";
 import {
   getReportSnapshot,
@@ -67,9 +70,9 @@ export async function GET(request: NextRequest) {
       "Data",
       "Entrada",
       "Sortida",
-      "Temps brut (min)",
-      "Pauses (min)",
-      "Temps net (min)",
+      "Temps brut",
+      "Pauses",
+      "Temps net",
       "Jornades",
       "Pauses registrades",
       "Notes",
@@ -77,6 +80,12 @@ export async function GET(request: NextRequest) {
       "Tipus",
       "Absència"
     ];
+
+    const fmtMin = (minutes: number): string => {
+      const h = Math.floor(minutes / 60);
+      const m = minutes % 60;
+      return `${h}h ${String(m).padStart(2, "0")}min`;
+    };
 
     let rows: string[][];
     const userNames: string[] = [];
@@ -102,9 +111,9 @@ export async function GET(request: NextRequest) {
             day.dateKey,
             day.firstClockIn ? formatTime(day.firstClockIn) : "",
             day.lastClockOut ? formatTime(day.lastClockOut) : "",
-            day.workedMinutes.toString(),
-            day.breakMinutes.toString(),
-            day.netMinutes.toString(),
+            fmtMin(day.workedMinutes),
+            fmtMin(day.breakMinutes),
+            fmtMin(day.netMinutes),
             day.entryCount.toString(),
             day.breaksCount.toString(),
             day.notes || "",
@@ -120,9 +129,9 @@ export async function GET(request: NextRequest) {
           "TOTAL",
           "",
           "",
-          userReport.snapshot.totals.workedMinutes.toString(),
-          userReport.snapshot.totals.breakMinutes.toString(),
-          userReport.snapshot.totals.netMinutes.toString(),
+          fmtMin(userReport.snapshot.totals.workedMinutes),
+          fmtMin(userReport.snapshot.totals.breakMinutes),
+          fmtMin(userReport.snapshot.totals.netMinutes),
           userReport.snapshot.totals.entries.toString(),
           ""
         ]);
@@ -139,9 +148,9 @@ export async function GET(request: NextRequest) {
         day.dateKey,
         day.firstClockIn ? formatTime(day.firstClockIn) : "",
         day.lastClockOut ? formatTime(day.lastClockOut) : "",
-        day.workedMinutes.toString(),
-        day.breakMinutes.toString(),
-        day.netMinutes.toString(),
+        fmtMin(day.workedMinutes),
+        fmtMin(day.breakMinutes),
+        fmtMin(day.netMinutes),
         day.entryCount.toString(),
         day.breaksCount.toString(),
         day.notes || "",
@@ -157,9 +166,9 @@ export async function GET(request: NextRequest) {
         "TOTAL",
         "",
         "",
-        snapshot.totals.workedMinutes.toString(),
-        snapshot.totals.breakMinutes.toString(),
-        snapshot.totals.netMinutes.toString(),
+        fmtMin(snapshot.totals.workedMinutes),
+        fmtMin(snapshot.totals.breakMinutes),
+        fmtMin(snapshot.totals.netMinutes),
         snapshot.totals.entries.toString(),
         ""
       ]);
@@ -171,7 +180,7 @@ export async function GET(request: NextRequest) {
         "",
         "",
         "",
-        snapshot.totals.avgNetMinutesPerDay.toString(),
+        fmtMin(snapshot.totals.avgNetMinutesPerDay),
         "",
         ""
       ]);
@@ -191,9 +200,13 @@ export async function GET(request: NextRequest) {
 
     const filename = `${namePart}_${dateRange}.csv`;
 
+    const escapeCell = (cell: string) =>
+      `"${cell.replace(/"/g, '""')}"`;
+
     const csvContent = [
-      headers.join(","),
-      ...rows.map((row) => row.map((cell) => `"${cell}"`).join(","))
+      "sep=;",
+      headers.map(escapeCell).join(";"),
+      ...rows.map((row) => row.map(escapeCell).join(";"))
     ].join("\n");
 
     const bom = "\uFEFF";

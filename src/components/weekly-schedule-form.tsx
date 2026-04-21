@@ -164,11 +164,12 @@ export function WeeklyScheduleForm({
                   : "border-line/80 bg-mist/50 opacity-60"
               }`}
             >
-              <div className="flex items-center gap-2">
+              {/* Fila 1: toggle + dia + matí */}
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
                 <button
                   type="button"
                   onClick={() => handleToggle(schedule.dayOfWeek)}
-                  className={`relative h-5 w-9 rounded-full transition ${
+                  className={`relative h-5 w-9 shrink-0 rounded-full transition ${
                     schedule.isActive ? "bg-brand" : "bg-line"
                   }`}
                 >
@@ -179,11 +180,12 @@ export function WeeklyScheduleForm({
                   />
                 </button>
 
-                <span className="w-16 text-xs font-medium text-ink">
+                <span className="w-16 shrink-0 text-sm font-semibold text-ink">
                   {schedule.dayName}
                 </span>
 
-                <div className="flex flex-1 items-center gap-1">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs font-medium text-ink/50">Matí</span>
                   <input
                     type="time"
                     value={schedule.morningIn}
@@ -195,9 +197,9 @@ export function WeeklyScheduleForm({
                       )
                     }
                     disabled={!schedule.isActive}
-                    className="w-20 rounded-lg border border-line bg-white px-2 py-1.5 text-xs text-ink outline-none transition focus:border-brand disabled:opacity-50"
+                    className="w-28 rounded-lg border border-line bg-white px-2 py-2 text-sm text-ink outline-none transition focus:border-brand disabled:opacity-50"
                   />
-                  <span className="text-[10px] text-ink/40">-</span>
+                  <span className="text-xs text-ink/40">–</span>
                   <input
                     type="time"
                     value={schedule.morningOut}
@@ -209,29 +211,29 @@ export function WeeklyScheduleForm({
                       )
                     }
                     disabled={!schedule.isActive}
-                    className="w-20 rounded-lg border border-line bg-white px-2 py-1.5 text-xs text-ink outline-none transition focus:border-brand disabled:opacity-50"
+                    className="w-28 rounded-lg border border-line bg-white px-2 py-2 text-sm text-ink outline-none transition focus:border-brand disabled:opacity-50"
                   />
                 </div>
 
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-2">
                   <button
                     type="button"
                     onClick={() => handleAfternoonToggle(schedule.dayOfWeek)}
                     disabled={!schedule.isActive}
-                    className={`relative h-4 w-7 rounded-full transition ${
+                    className={`relative h-5 w-9 shrink-0 rounded-full transition ${
                       schedule.hasAfternoon ? "bg-brand" : "bg-line"
                     } disabled:opacity-50`}
                   >
                     <span
-                      className={`absolute left-0.5 top-0.5 h-3 w-3 rounded-full bg-white transition-transform ${
+                      className={`absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white transition-transform ${
                         schedule.hasAfternoon
-                          ? "translate-x-3"
+                          ? "translate-x-4"
                           : "translate-x-0"
                       }`}
                     />
                   </button>
                   <span
-                    className={`text-[10px] font-medium ${
+                    className={`text-xs font-medium ${
                       schedule.hasAfternoon ? "text-ink" : "text-ink/40"
                     }`}
                   >
@@ -240,7 +242,7 @@ export function WeeklyScheduleForm({
                 </div>
 
                 {schedule.hasAfternoon && (
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-1.5">
                     <input
                       type="time"
                       value={schedule.afternoonIn}
@@ -252,9 +254,9 @@ export function WeeklyScheduleForm({
                         )
                       }
                       disabled={!schedule.isActive}
-                      className="w-20 rounded-lg border border-line bg-white px-2 py-1.5 text-xs text-ink outline-none transition focus:border-brand disabled:opacity-50"
+                      className="w-28 rounded-lg border border-line bg-white px-2 py-2 text-sm text-ink outline-none transition focus:border-brand disabled:opacity-50"
                     />
-                    <span className="text-[10px] text-ink/40">-</span>
+                    <span className="text-xs text-ink/40">–</span>
                     <input
                       type="time"
                       value={schedule.afternoonOut}
@@ -266,28 +268,31 @@ export function WeeklyScheduleForm({
                         )
                       }
                       disabled={!schedule.isActive}
-                      className="w-20 rounded-lg border border-line bg-white px-2 py-1.5 text-xs text-ink outline-none transition focus:border-brand disabled:opacity-50"
+                      className="w-28 rounded-lg border border-line bg-white px-2 py-2 text-sm text-ink outline-none transition focus:border-brand disabled:opacity-50"
                     />
                   </div>
                 )}
 
-                <select
-                  value={schedule.reminderMinutes}
-                  onChange={(e) =>
-                    handleReminderChange(
-                      schedule.dayOfWeek,
-                      Number(e.target.value)
-                    )
-                  }
-                  disabled={!schedule.isActive}
-                  className="w-16 rounded-lg border border-line bg-white px-2 py-1.5 text-[10px] text-ink outline-none transition focus:border-brand disabled:opacity-50"
-                >
-                  <option value={5}>5m</option>
-                  <option value={10}>10m</option>
-                  <option value={15}>15m</option>
-                  <option value={30}>30m</option>
-                  <option value={60}>1h</option>
-                </select>
+                <div className="flex items-center gap-1.5 ml-auto">
+                  <span className="text-xs text-ink/50">Rec.</span>
+                  <select
+                    value={schedule.reminderMinutes}
+                    onChange={(e) =>
+                      handleReminderChange(
+                        schedule.dayOfWeek,
+                        Number(e.target.value)
+                      )
+                    }
+                    disabled={!schedule.isActive}
+                    className="w-20 rounded-lg border border-line bg-white px-2 py-2 text-sm text-ink outline-none transition focus:border-brand disabled:opacity-50"
+                  >
+                    <option value={5}>5 min</option>
+                    <option value={10}>10 min</option>
+                    <option value={15}>15 min</option>
+                    <option value={30}>30 min</option>
+                    <option value={60}>1 hora</option>
+                  </select>
+                </div>
               </div>
             </div>
           ))}

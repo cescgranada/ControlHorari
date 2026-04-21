@@ -1,7 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
+import { useEscapeKey } from "@/hooks/use-escape-key";
 import { useRouter } from "next/navigation";
+import { getDateKey, APP_TIME_ZONE } from "@/lib/utils/time";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
@@ -12,15 +14,15 @@ import {
 export function AddManualEntryButton() {
   const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
+  const closeModal = useCallback(() => setIsOpen(false), []);
+  useEscapeKey(closeModal);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [isSplit, setIsSplit] = useState(false);
 
-  const today = new Date().toISOString().split("T")[0];
-  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
-    .toISOString()
-    .split("T")[0];
+  const today = getDateKey(new Date(), APP_TIME_ZONE);
+  const sevenDaysAgo = getDateKey(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000), APP_TIME_ZONE);
 
   async function handleSubmit(formData: FormData) {
     setLoading(true);

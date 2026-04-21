@@ -9,6 +9,7 @@ import {
   validateTimeEntry,
   isWithinLastNDays
 } from "@/lib/utils/time-validation";
+import { localToISO, APP_TIME_ZONE } from "@/lib/utils/time";
 
 export type AddManualEntryResult = {
   success: boolean;
@@ -38,15 +39,15 @@ export async function addManualEntryAction(
     return { success: false, error: "Falten camps obligatoris." };
   }
 
-  // Parse dates
-  const [year, month, day] = date.split("-").map(Number);
-  const [inHours, inMinutes] = clockInTime.split(":").map(Number);
-  const clockInDate = new Date(year, month - 1, day, inHours, inMinutes);
+  // Parse dates — convert Europe/Madrid local times to UTC
+  const clockInISO = localToISO(date, clockInTime, APP_TIME_ZONE);
+  const clockInDate = new Date(clockInISO);
 
   let clockOutDate: Date | null = null;
+  let clockOutISO: string | null = null;
   if (clockOutTime) {
-    const [outHours, outMinutes] = clockOutTime.split(":").map(Number);
-    clockOutDate = new Date(year, month - 1, day, outHours, outMinutes);
+    clockOutISO = localToISO(date, clockOutTime, APP_TIME_ZONE);
+    clockOutDate = new Date(clockOutISO);
     if (clockOutDate <= clockInDate) {
       return {
         success: false,
@@ -68,8 +69,8 @@ export async function addManualEntryAction(
   // Validate time entry using shared validation function
   const validation = await validateTimeEntry(
     context.user.id,
-    clockInDate.toISOString(),
-    clockOutDate ? clockOutDate.toISOString() : null,
+    clockInISO,
+    clockOutISO,
     undefined,
     supabase
   );
@@ -81,7 +82,7 @@ export async function addManualEntryAction(
   // Create manual entry (always open first, then close if needed)
   const payload = {
     user_id: context.user.id,
-    clock_in: clockInDate.toISOString(),
+    clock_in: clockInISO,
     clock_out: null,
     is_manual: true,
     edited_by: context.user.id,
@@ -91,7 +92,7 @@ export async function addManualEntryAction(
 
   const { data: insertedEntry, error: insertError } = await supabase
     .from("time_entries")
-    .insert(payload as never)
+    .insert(payload)
     .select("id")
     .single();
 
@@ -100,15 +101,15 @@ export async function addManualEntryAction(
   }
 
   // If clock_out was provided, update the entry to close it
-  if (clockOutDate && insertedEntry) {
+  if (clockOutISO && insertedEntry) {
     const { error: updateError } = await supabase
       .from("time_entries")
       .update({
-        clock_out: clockOutDate.toISOString(),
+        clock_out: clockOutISO,
         is_manual: true,
         edited_by: context.user.id,
         edit_reason: reason
-      } as never)
+      })
       .eq("id", (insertedEntry as { id: string }).id);
 
     if (updateError) {
@@ -198,7 +199,7 @@ export async function updateEntryAction(
 
   const { error } = await supabase
     .from("time_entries")
-    .update(updateData as never)
+    .update(updateData)
     .eq("id", entryId);
 
   if (error) {

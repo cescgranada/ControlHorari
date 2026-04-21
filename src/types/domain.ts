@@ -33,6 +33,7 @@ export type DashboardWeekDay = {
 
 export type DashboardSnapshot = {
   status: WorkStatus;
+  weeklyHours: number;
   activeEntry: {
     id: string;
     clockIn: string;
@@ -102,6 +103,12 @@ export type HistorySnapshot = {
     netMinutes: number;
     breakMinutes: number;
     incidents: number;
+  };
+  pagination: {
+    page: number;
+    pageSize: number;
+    totalEntries: number;
+    totalPages: number;
   };
 };
 

@@ -7,33 +7,33 @@ import {
   startBreakAction,
   startWorkdayAction
 } from "@/features/dashboard/actions";
-import { LiveDuration } from "@/features/dashboard/components/live-duration";
+import { LiveDuration, LiveNetDuration } from "@/features/dashboard/components/live-duration";
 import { GeolocationButton } from "@/features/dashboard/components/geolocation-button";
 import { MarkAbsenceForm } from "@/components/mark-absence-form";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { routes } from "@/lib/constants/navigation";
-import { formatDuration, formatTime } from "@/lib/utils/time";
+import { formatDuration, formatTime, APP_TIME_ZONE } from "@/lib/utils/time";
 import type { BreakType, DashboardSnapshot } from "@/types/domain";
 
 function getGreeting(): string {
-  const now = new Date();
-  const hour = now.getHours();
-
-  if (hour >= 8 && hour < 13) {
-    return "Bon dia";
-  } else if (hour >= 15 && hour < 17) {
-    return "Bona tarda";
-  } else {
-    return "Bon dia";
-  }
+  const hourStr = new Intl.DateTimeFormat("en-US", {
+    timeZone: APP_TIME_ZONE,
+    hour: "numeric",
+    hour12: false
+  }).format(new Date());
+  const hour = parseInt(hourStr, 10);
+  if (hour >= 6 && hour < 13) return "Bon dia";
+  if (hour >= 13 && hour < 20) return "Bona tarda";
+  return "Bona nit";
 }
 
 type DashboardScreenProps = {
   snapshot: DashboardSnapshot;
   userName: string;
   userRole: "worker" | "admin";
+  pendingAbsencesCount?: number;
   error?: string;
   message?: string;
 };
@@ -87,6 +87,7 @@ export function DashboardScreen({
   snapshot,
   userName,
   userRole,
+  pendingAbsencesCount = 0,
   error,
   message
 }: DashboardScreenProps) {
@@ -138,6 +139,19 @@ export function DashboardScreen({
                 </p>
               </Card>
             </Link>
+
+            <Link href={routes.adminUsers + "?filter=absences"}>
+              <Card className="cursor-pointer border-success/20 bg-success-soft/70 transition hover:bg-success-soft">
+                <p className="text-sm font-semibold text-ink">
+                  Absències pendents
+                </p>
+                <p className="mt-2 text-lg text-ink/70">
+                  {pendingAbsencesCount > 0
+                    ? `${pendingAbsencesCount} sol·licitud/s per revisar`
+                    : "Cap sol·licitud pendent"}
+                </p>
+              </Card>
+            </Link>
           </div>
         </Card>
       </div>
@@ -170,7 +184,10 @@ export function DashboardScreen({
               {activePause ? (
                 <LiveDuration startIso={activePause.startedAt} />
               ) : activeEntry ? (
-                <LiveDuration startIso={activeEntry.clockIn} />
+                <LiveNetDuration
+                  clockInIso={activeEntry.clockIn}
+                  accumulatedBreakMinutes={snapshot.today.breakMinutes}
+                />
               ) : (
                 formatDuration(snapshot.today.netMinutes)
               )}
@@ -179,7 +196,7 @@ export function DashboardScreen({
               {activePause
                 ? "Durada de la pausa actual"
                 : activeEntry
-                  ? "Temps en jornada activa"
+                  ? "Temps net en jornada activa"
                   : "Resum net del dia"}
             </p>
           </div>
@@ -283,7 +300,15 @@ export function DashboardScreen({
           <Card className="border-brand/15 bg-brand-soft/70">
             <p className="text-sm font-semibold text-ink">Temps net</p>
             <p className="mt-2 text-2xl font-semibold text-ink">
-              {formatDuration(snapshot.today.netMinutes)}
+              {activeEntry ? (
+                <LiveNetDuration
+                  clockInIso={activeEntry.clockIn}
+                  accumulatedBreakMinutes={snapshot.today.breakMinutes}
+                  activePauseStartIso={activePause?.startedAt}
+                />
+              ) : (
+                formatDuration(snapshot.today.netMinutes)
+              )}
             </p>
             <p className="mt-1 text-sm text-ink/60">
               {snapshot.today.hasEntry
@@ -306,30 +331,49 @@ export function DashboardScreen({
             </Link>
           </div>
           <h3 className="mt-4 font-serif text-2xl text-ink">Resum setmanal</h3>
-          <p className="text-ink/68 mt-2 text-sm leading-7">
-            {snapshot.week.length > 0
-              ? `Portes ${formatDuration(snapshot.week.reduce((sum, day) => sum + day.netMinutes, 0))} aquesta setmana.`
-              : "Sense hores registrades aquesta setmana."}
-          </p>
-          <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <div className="rounded-2xl border border-line/80 bg-mist/70 px-4 py-3">
-              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-ink/60">
-                Dies
-              </p>
-              <p className="mt-2 text-xl font-semibold text-ink">
-                {snapshot.week.filter((day) => day.hasEntry).length}
-              </p>
-            </div>
-            <div className="rounded-2xl border border-line/80 bg-mist/70 px-4 py-3">
-              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-ink/60">
-                Net
-              </p>
-              <p className="mt-2 text-xl font-semibold text-ink">
-                {formatDuration(
-                  snapshot.week.reduce((sum, day) => sum + day.netMinutes, 0)
-                )}
-              </p>
-            </div>
+
+          {(() => {
+            const doneMinutes = snapshot.week.reduce((sum, day) => sum + day.netMinutes, 0);
+            const targetMinutes = snapshot.weeklyHours * 60;
+            const pct = targetMinutes > 0 ? Math.min(100, Math.round((doneMinutes / targetMinutes) * 100)) : 0;
+            const remaining = Math.max(0, targetMinutes - doneMinutes);
+            const isComplete = doneMinutes >= targetMinutes;
+            return (
+              <div className="mt-4 space-y-3">
+                <div className="flex items-end justify-between">
+                  <div>
+                    <span className="text-2xl font-semibold text-ink">{formatDuration(doneMinutes)}</span>
+                    <span className="ml-2 text-sm text-ink/50">de {formatDuration(targetMinutes)}</span>
+                  </div>
+                  <span className={`text-sm font-semibold ${isComplete ? "text-success" : "text-ink/60"}`}>
+                    {isComplete ? "Setmana completada!" : `Falten ${formatDuration(remaining)}`}
+                  </span>
+                </div>
+                <div className="h-3 w-full overflow-hidden rounded-full bg-mist">
+                  <div
+                    className={`h-full rounded-full transition-all duration-500 ${isComplete ? "bg-success" : "bg-brand"}`}
+                    style={{ width: `${pct}%` }}
+                  />
+                </div>
+                <div className="flex items-center justify-between text-xs text-ink/40">
+                  <span>{pct}% completat</span>
+                  <span>{snapshot.week.filter((d) => d.hasEntry).length} dies treballats</span>
+                </div>
+              </div>
+            );
+          })()}
+
+          <div className="mt-4 grid grid-cols-5 gap-1.5">
+            {snapshot.week.map((day) => (
+              <div key={day.dateKey} className={`rounded-xl px-2 py-2.5 text-center ${day.isToday ? "border border-brand/20 bg-brand-soft/60" : "bg-mist/60"}`}>
+                <p className={`text-[10px] font-semibold uppercase tracking-wider ${day.isToday ? "text-brand-strong" : "text-ink/40"}`}>
+                  {day.label}
+                </p>
+                <p className={`mt-1 text-sm font-semibold ${day.hasEntry ? "text-ink" : "text-ink/25"}`}>
+                  {day.hasEntry ? formatDuration(day.netMinutes) : "–"}
+                </p>
+              </div>
+            ))}
           </div>
         </Card>
 

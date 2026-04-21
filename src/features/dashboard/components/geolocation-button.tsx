@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useEffect, useState } from "react";
+import { useRef, useEffect, useState, useCallback } from "react";
 import dynamic from "next/dynamic";
 import { Button } from "@/components/ui/button";
 import { useGeolocation } from "@/hooks/use-geolocation";
@@ -34,25 +34,41 @@ export function GeolocationButton({
     useGeolocation();
   const [submittedOnError, setSubmittedOnError] = useState(false);
   const [comment, setComment] = useState(existingNote ?? "");
+  const commentRef = useRef(comment);
 
   useEffect(() => {
-    if (latitude !== null && longitude !== null && formRef.current) {
-      const formData = new FormData(formRef.current);
-      formData.set("latitude", latitude.toString());
-      formData.set("longitude", longitude.toString());
-      formData.set("comment", comment);
-      action(formData);
+    commentRef.current = comment;
+  }, [comment]);
+
+  const submitWithCoords = useCallback((lat: number, lng: number, acc: number | null) => {
+    if (!formRef.current) return;
+    const formData = new FormData(formRef.current);
+    formData.set("latitude", lat.toString());
+    formData.set("longitude", lng.toString());
+    if (acc !== null) formData.set("accuracy", acc.toString());
+    formData.set("comment", commentRef.current);
+    action(formData);
+  }, [action]);
+
+  const submitWithoutCoords = useCallback(() => {
+    if (!formRef.current) return;
+    const formData = new FormData(formRef.current);
+    formData.set("comment", commentRef.current);
+    action(formData);
+  }, [action]);
+
+  useEffect(() => {
+    if (latitude !== null && longitude !== null) {
+      submitWithCoords(latitude, longitude, accuracy);
     }
-  }, [latitude, longitude, action, comment]);
+  }, [latitude, longitude, accuracy, submitWithCoords]);
 
   useEffect(() => {
-    if (error && formRef.current && !loading && !submittedOnError) {
+    if (error && !loading && !submittedOnError) {
       setSubmittedOnError(true);
-      const formData = new FormData(formRef.current);
-      formData.set("comment", comment);
-      action(formData);
+      submitWithoutCoords();
     }
-  }, [error, action, loading, submittedOnError, comment]);
+  }, [error, loading, submittedOnError, submitWithoutCoords]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

@@ -1,3 +1,6 @@
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 import { NextRequest } from "next/server";
 import {
   getReportSnapshot,
@@ -65,6 +68,12 @@ export async function GET(request: NextRequest) {
 
     const dateRange = `${from}-${to}`;
     let filename = `Informe_${dateRange}.pdf`;
+
+    function fmtMin(minutes: number): string {
+      const h = Math.floor(minutes / 60);
+      const m = minutes % 60;
+      return `${h}h ${String(m).padStart(2, "0")}min`;
+    }
     const doc = new jsPDF();
     const lineHeight = 7;
     const colWidths = [30, 40, 40, 30, 30];
@@ -140,16 +149,16 @@ export async function GET(request: NextRequest) {
           day.dateKey,
           day.firstClockIn ? formatTime(day.firstClockIn) : "",
           day.lastClockOut ? formatTime(day.lastClockOut) : "",
-          `${day.netMinutes} min`,
-          `${day.breakMinutes} min`
+          fmtMin(day.netMinutes),
+          fmtMin(day.breakMinutes)
         ]);
 
         data.push([
           "TOTAL",
           "",
           "",
-          `${userReport.snapshot.totals.netMinutes} min`,
-          `${userReport.snapshot.totals.breakMinutes} min`
+          fmtMin(userReport.snapshot.totals.netMinutes),
+          fmtMin(userReport.snapshot.totals.breakMinutes)
         ]);
 
         y = drawTable(y, data);
@@ -209,23 +218,23 @@ export async function GET(request: NextRequest) {
 
       filename = `${userName.replace(/\s+/g, "_")}_${dateRange}.pdf`;
 
-      const data = snapshot.days.map((day) => [
+      const data: string[][] = snapshot.days.map((day) => [
         day.dateKey,
         day.firstClockIn ? formatTime(day.firstClockIn) : "",
         day.lastClockOut ? formatTime(day.lastClockOut) : "",
-        `${day.netMinutes} min`,
-        `${day.breakMinutes} min`
+        fmtMin(day.netMinutes),
+        fmtMin(day.breakMinutes)
       ]);
 
       data.push([
         "TOTAL",
         "",
         "",
-        `${snapshot.totals.netMinutes} min`,
-        `${snapshot.totals.breakMinutes} min`
+        fmtMin(snapshot.totals.netMinutes),
+        fmtMin(snapshot.totals.breakMinutes)
       ]);
 
-      drawTable(45, data);
+      drawTable(52, data);
     }
 
     const pdfOutput = doc.output("blob");

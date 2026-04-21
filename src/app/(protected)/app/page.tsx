@@ -1,6 +1,7 @@
 import { DashboardScreen } from "@/features/dashboard/components/dashboard-screen";
 import { requireUser } from "@/server/services/auth.service";
 import { getDashboardSnapshot } from "@/server/services/dashboard.service";
+import { getPendingAbsences } from "@/server/services/team.service";
 
 type AppPageProps = {
   searchParams?: {
@@ -12,13 +13,19 @@ type AppPageProps = {
 export default async function AppPage({ searchParams }: AppPageProps) {
   try {
     const context = await requireUser();
-    const snapshot = await getDashboardSnapshot(context.user.id);
+    const isAdmin = context.profile?.role === "admin";
+
+    const [snapshot, pendingAbsences] = await Promise.all([
+      getDashboardSnapshot(context.user.id, context.profile?.weekly_hours ?? 30),
+      isAdmin ? getPendingAbsences() : Promise.resolve([])
+    ]);
 
     return (
       <DashboardScreen
         snapshot={snapshot}
         userName={context.profile?.full_name ?? context.user.email ?? "Usuari"}
         userRole={context.profile?.role ?? "worker"}
+        pendingAbsencesCount={pendingAbsences.length}
         error={searchParams?.error}
         message={searchParams?.message}
       />

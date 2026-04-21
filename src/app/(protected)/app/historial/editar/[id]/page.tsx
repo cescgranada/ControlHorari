@@ -3,6 +3,7 @@ import { requireUser } from "@/server/services/auth.service";
 import { getTimeEntryById } from "@/server/repositories/time-entry.repository";
 import { updateEntryAction } from "@/features/history/actions";
 import { routes } from "@/lib/constants/navigation";
+import { localToISO, APP_TIME_ZONE } from "@/lib/utils/time";
 
 type EditEntryPageProps = {
   params: {
@@ -32,12 +33,18 @@ export default async function EditEntryPage({ params }: EditEntryPageProps) {
     redirect(routes.history);
   }
 
-  // Convert to local datetime string for input
+  // Convert UTC ISO to datetime-local value in Europe/Madrid
   const toLocalDateTime = (isoString: string) => {
     const date = new Date(isoString);
-    const offset = date.getTimezoneOffset();
-    const local = new Date(date.getTime() - offset * 60 * 1000);
-    return local.toISOString().slice(0, 16);
+    const parts = new Intl.DateTimeFormat("sv-SE", {
+      timeZone: APP_TIME_ZONE,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit"
+    }).format(date);
+    return parts.replace(" ", "T");
   };
 
   const clockInLocal = toLocalDateTime(entry.clock_in);
@@ -60,9 +67,11 @@ export default async function EditEntryPage({ params }: EditEntryPageProps) {
             const reason = formData.get("reason") as string;
             const period = formData.get("period") as string;
 
-            const clockInIso = new Date(clockIn).toISOString();
+            // clockIn/clockOut are "YYYY-MM-DDTHH:MM" from datetime-local input (Europe/Madrid)
+            const [ciDate, ciTime] = clockIn.split("T") as [string, string];
+            const clockInIso = localToISO(ciDate, ciTime, APP_TIME_ZONE);
             const clockOutIso = clockOut
-              ? new Date(clockOut).toISOString()
+              ? (() => { const [coDate, coTime] = clockOut.split("T") as [string, string]; return localToISO(coDate, coTime, APP_TIME_ZONE); })()
               : null;
 
             await updateEntryAction(
@@ -77,13 +86,13 @@ export default async function EditEntryPage({ params }: EditEntryPageProps) {
           className="mt-6 space-y-4"
         >
           <div>
-            <label className="block text-sm font-medium text-ink">
+            <label className="block text-sm font-semibold text-ink/80">
               Període
             </label>
             <select
               name="period"
               defaultValue={currentPeriod}
-              className="mt-1 block w-full rounded-md border border-line px-3 py-2 text-ink shadow-sm focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"
+              className="mt-1.5 block w-full rounded-xl border border-line bg-white px-4 py-2.5 text-sm text-ink outline-none transition focus:border-brand focus:ring-4 focus:ring-brand/5"
             >
               <option value="full">Jornada completa</option>
               <option value="morning">Matí</option>
@@ -92,7 +101,7 @@ export default async function EditEntryPage({ params }: EditEntryPageProps) {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-ink">
+            <label className="block text-sm font-semibold text-ink/80">
               Data i hora d&apos;entrada
             </label>
             <input
@@ -100,31 +109,32 @@ export default async function EditEntryPage({ params }: EditEntryPageProps) {
               name="clockIn"
               defaultValue={clockInLocal}
               required
-              className="mt-1 block w-full rounded-md border border-line px-3 py-2 text-ink shadow-sm focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"
+              className="mt-1.5 block w-full rounded-xl border border-line bg-white px-4 py-2.5 text-sm text-ink outline-none transition focus:border-brand focus:ring-4 focus:ring-brand/5"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-ink">
-              Data i hora de sortida (opcional)
+            <label className="block text-sm font-semibold text-ink/80">
+              Data i hora de sortida
+              <span className="ml-2 text-[10px] font-normal uppercase tracking-wider text-ink/40">Opcional</span>
             </label>
             <input
               type="datetime-local"
               name="clockOut"
               defaultValue={clockOutLocal}
-              className="mt-1 block w-full rounded-md border border-line px-3 py-2 text-ink shadow-sm focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"
+              className="mt-1.5 block w-full rounded-xl border border-line bg-white px-4 py-2.5 text-sm text-ink outline-none transition focus:border-brand focus:ring-4 focus:ring-brand/5"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-ink">
+            <label className="block text-sm font-semibold text-ink/80">
               Motiu de la correcció
             </label>
             <textarea
               name="reason"
               required
               rows={3}
-              className="mt-1 block w-full rounded-md border border-line px-3 py-2 text-ink shadow-sm focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"
+              className="mt-1.5 block w-full rounded-xl border border-line bg-white px-4 py-2.5 text-sm text-ink outline-none transition focus:border-brand focus:ring-4 focus:ring-brand/5"
               placeholder="Indica per què necessites corregir aquesta entrada..."
             />
           </div>

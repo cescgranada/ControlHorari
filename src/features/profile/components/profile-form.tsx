@@ -98,7 +98,12 @@ export function ProfileForm({
           <div className="text-ink/72 rounded-[1.5rem] border border-line/80 bg-mist/70 px-4 py-4 text-sm">
             <p className="font-semibold text-ink">Jornada contractual</p>
             <p className="mt-2">
-              {profile?.weekly_hours ?? 37.5} hores/setmana
+              {(() => {
+                const h = profile?.weekly_hours ?? 37.5;
+                const whole = Math.floor(h);
+                const mins = Math.round((h - whole) * 60);
+                return mins > 0 ? `${whole}h ${mins}min/setmana` : `${whole} hores/setmana`;
+              })()}
               {profile?.department ? ` · ${profile.department}` : ""}
             </p>
           </div>

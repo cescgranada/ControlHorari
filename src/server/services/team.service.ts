@@ -1,10 +1,11 @@
+import { APP_TIME_ZONE, getDateKey } from "@/lib/utils/time";
 import { createClient } from "@/lib/supabase/server";
 
 export type TeamMemberStatus = {
   id: string;
   name: string;
   email: string;
-  status: "clocked_in" | "clocked_out" | "on_break" | "absent";
+  status: "clocked_in" | "clocked_out" | "finished" | "on_break" | "absent";
   clockInTime: string | null;
   clockOutTime: string | null;
   absenceType: "sick" | "personal" | "other" | null;
@@ -14,7 +15,7 @@ export type TeamMemberStatus = {
 export async function getTeamStatus(): Promise<TeamMemberStatus[]> {
   const supabase = createClient();
 
-  const today = new Date().toISOString().split("T")[0];
+  const today = getDateKey(new Date(), APP_TIME_ZONE);
   const startOfDay = `${today}T00:00:00.000Z`;
   const endOfDay = `${today}T23:59:59.999Z`;
 
@@ -89,7 +90,7 @@ export async function getTeamStatus(): Promise<TeamMemberStatus[]> {
         id: user.id,
         name: user.full_name,
         email: user.email ?? "",
-        status: "clocked_out" as const,
+        status: "finished" as const,
         clockInTime: userEntry.clock_in,
         clockOutTime: userEntry.clock_out,
         absenceType: null,
@@ -162,10 +163,23 @@ export async function getPendingAbsences(): Promise<PendingAbsence[]> {
     throw new Error(error.message);
   }
 
-  return (data || []).map((item: any) => ({
+  type AbsenceRow = {
+    id: string;
+    user_id: string;
+    absence_date: string;
+    absence_type: "sick" | "personal" | "other";
+    status: "pending" | "approved" | "rejected";
+    reason: string | null;
+    is_full_day: boolean;
+    start_time: string | null;
+    end_time: string | null;
+    profiles: { full_name: string } | null;
+  };
+
+  return ((data ?? []) as AbsenceRow[]).map((item) => ({
     id: item.id,
     userId: item.user_id,
-    userName: item.profiles?.full_name || "Usuari desconegut",
+    userName: item.profiles?.full_name ?? "Usuari desconegut",
     date: item.absence_date,
     type: item.absence_type,
     reason: item.reason,

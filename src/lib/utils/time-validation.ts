@@ -1,3 +1,4 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { getEntriesForUserInRange } from "@/server/repositories/time-entry.repository";
 
 export async function validateTimeEntry(
@@ -5,7 +6,7 @@ export async function validateTimeEntry(
   clockInIso: string,
   clockOutIso: string | null,
   excludeEntryId?: string,
-  supabaseClient?: any
+  supabaseClient?: SupabaseClient
 ): Promise<{ valid: boolean; error?: string }> {
   const clockIn = new Date(clockInIso);
   const clockOut = clockOutIso ? new Date(clockOutIso) : null;

@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { useEscapeKey } from "@/hooks/use-escape-key";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -8,7 +9,8 @@ import type { UserListItem } from "@/server/repositories/user.repository";
 import {
   createUserAction,
   updateUserAction,
-  deleteUserAction
+  deleteUserAction,
+  reactivateUserAction
 } from "@/server/actions/user.actions";
 import { AdminAbsenceManagement } from "./admin-absence-management";
 import type { PendingAbsence } from "@/server/services/team.service";
@@ -47,24 +49,40 @@ export function AdminUsersScreen({
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
+  const [userToDeactivate, setUserToDeactivate] = useState<UserListItem | null>(null);
+  const [userToReactivate, setUserToReactivate] = useState<UserListItem | null>(null);
+  const [newUserCredentials, setNewUserCredentials] = useState<{ email: string; password: string } | null>(null);
+
   const [searchTerm, setSearchTerm] = useState("");
-  const [roleFilter, setRoleFilter] = useState<"all" | "admin" | "worker">(
+  const [roleFilter, setRoleFilter] = useState<"all" | "admin" | "worker" | "inactive">(
     "all"
   );
+
+  const closeActiveModal = useCallback(() => {
+    if (isCreating || editingUser) { setIsCreating(false); setEditingUser(null); }
+    else if (userToDeactivate) setUserToDeactivate(null);
+    else if (userToReactivate) setUserToReactivate(null);
+    else if (newUserCredentials) setNewUserCredentials(null);
+  }, [isCreating, editingUser, userToDeactivate, userToReactivate, newUserCredentials]);
+  useEscapeKey(closeActiveModal);
 
   const filteredUsers = users.filter((user) => {
     const matchesSearch =
       user.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       user.email.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesRole = roleFilter === "all" || user.role === roleFilter;
+    let matchesRole: boolean;
+    if (roleFilter === "all") matchesRole = true;
+    else if (roleFilter === "inactive") matchesRole = !user.is_active;
+    else matchesRole = user.role === roleFilter && user.is_active;
     return matchesSearch && matchesRole;
   });
 
   const stats = {
     total: users.length,
     active: users.filter((u) => u.is_active).length,
-    admins: users.filter((u) => u.role === "admin").length,
-    workers: users.filter((u) => u.role === "worker").length
+    admins: users.filter((u) => u.role === "admin" && u.is_active).length,
+    workers: users.filter((u) => u.role === "worker" && u.is_active).length,
+    inactive: users.filter((u) => !u.is_active).length
   };
 
   useEffect(() => {
@@ -117,10 +135,11 @@ export function AdminUsersScreen({
           password: formData.password || undefined
         });
         if (result.success) {
-          setSuccess(
-            `Usuari creat correctament. Contrasenya: ${result.data?.temporaryPassword}`
-          );
           setIsCreating(false);
+          setNewUserCredentials({
+            email: formData.email,
+            password: result.data?.temporaryPassword ?? ""
+          });
         } else setError(result.error || "Error creant l'usuari");
       } else if (editingUser) {
         const result = await updateUserAction(editingUser, {
@@ -142,12 +161,35 @@ export function AdminUsersScreen({
   };
 
   const handleDelete = async (userId: string) => {
-    if (!confirm("Estàs segur que vols desactivar aquest usuari?")) return;
     setLoading(true);
     try {
       const result = await deleteUserAction(userId);
-      if (result.success) setSuccess("Usuari desactivat correctament");
-      else setError(result.error || "Error desactivant l'usuari");
+      if (result.success) {
+        setSuccess("Usuari desactivat correctament");
+        setUserToDeactivate(null);
+      } else setError(result.error || "Error desactivant l'usuari");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error inesperat");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleReactivate = async (userId: string, generateNewPassword: boolean) => {
+    setLoading(true);
+    try {
+      const result = await reactivateUserAction(userId, generateNewPassword);
+      if (result.success) {
+        setUserToReactivate(null);
+        if (generateNewPassword && result.data?.temporaryPassword && userToReactivate) {
+          setNewUserCredentials({
+            email: userToReactivate.email,
+            password: result.data.temporaryPassword
+          });
+        } else {
+          setSuccess("Usuari activat correctament");
+        }
+      } else setError(result.error || "Error activant l'usuari");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error inesperat");
     } finally {
@@ -160,7 +202,7 @@ export function AdminUsersScreen({
       {/* Pending Absences Management */}
       <AdminAbsenceManagement pendingAbsences={pendingAbsences} />
       {/* Header \u0026 Stats */}
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-5">
         <Card className="border-l-4 border-none border-l-brand bg-white/40 p-5 shadow-sm backdrop-blur-md">
           <p className="text-xs font-bold uppercase tracking-wider text-ink/50">
             Total Usuaris
@@ -184,6 +226,12 @@ export function AdminUsersScreen({
             Treballadors
           </p>
           <p className="mt-2 font-serif text-3xl text-ink">{stats.workers}</p>
+        </Card>
+        <Card className="border-l-4 border-none border-l-line bg-white/40 p-5 shadow-sm backdrop-blur-md">
+          <p className="text-xs font-bold uppercase tracking-wider text-ink/50">
+            Inactius
+          </p>
+          <p className="mt-2 font-serif text-3xl text-ink/50">{stats.inactive}</p>
         </Card>
       </div>
 
@@ -232,12 +280,13 @@ export function AdminUsersScreen({
           </div>
           <select
             value={roleFilter}
-            onChange={(e) => setRoleFilter(e.target.value as any)}
+            onChange={(e) => setRoleFilter(e.target.value as "all" | "admin" | "worker" | "inactive")}
             className="rounded-2xl border border-line bg-mist/30 px-4 py-2.5 text-sm text-ink outline-none transition focus:border-brand focus:bg-white"
           >
-            <option value="all">Tots els rols</option>
+            <option value="all">Tots els usuaris</option>
             <option value="admin">Administradors</option>
             <option value="worker">Treballadors</option>
+            <option value="inactive">Inactius</option>
           </select>
         </div>
 
@@ -308,14 +357,25 @@ export function AdminUsersScreen({
                   >
                     Gestionar
                   </Button>
-                  <Button
-                    variant="secondary"
-                    className="h-9 rounded-xl border-danger/20 px-4 text-xs font-bold text-danger hover:bg-danger-soft/70"
-                    onClick={() => handleDelete(user.id)}
-                    disabled={!user.is_active}
-                  >
-                    Baixa
-                  </Button>
+                  {user.is_active ? (
+                    <Button
+                      variant="secondary"
+                      className="h-9 rounded-xl border-danger/20 px-4 text-xs font-bold text-danger hover:bg-danger-soft/70"
+                      onClick={() => setUserToDeactivate(user)}
+                      disabled={loading}
+                    >
+                      Baixa
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="secondary"
+                      className="h-9 rounded-xl border-success/20 px-4 text-xs font-bold text-success hover:bg-success-soft/70"
+                      onClick={() => setUserToReactivate(user)}
+                      disabled={loading}
+                    >
+                      Activar
+                    </Button>
+                  )}
                 </div>
               </div>
             ))
@@ -325,8 +385,11 @@ export function AdminUsersScreen({
 
       {/* Modal for creating/editing users */}
       {(isCreating || editingUser) && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <Card className="w-full max-w-md bg-white p-6">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+          onClick={() => { setIsCreating(false); setEditingUser(null); }}
+        >
+          <Card className="w-full max-w-md bg-white p-6" onClick={(e) => e.stopPropagation()}>
             <h3 className="font-serif text-2xl text-ink">
               {isCreating ? "Crear nou usuari" : "Editar usuari"}
             </h3>
@@ -335,7 +398,7 @@ export function AdminUsersScreen({
               <div>
                 <label
                   htmlFor="email"
-                  className="block text-sm font-medium text-ink"
+                  className="block text-sm font-semibold text-ink/80"
                 >
                   Correu electrònic *
                 </label>
@@ -347,14 +410,14 @@ export function AdminUsersScreen({
                   value={formData.email}
                   onChange={handleInputChange}
                   disabled={!isCreating}
-                  className="mt-1 block w-full rounded-md border border-line px-3 py-2 text-ink shadow-sm focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand disabled:cursor-not-allowed disabled:bg-gray-100"
+                  className="mt-1 block w-full rounded-xl border border-line bg-white px-4 py-2.5 text-sm text-ink outline-none transition focus:border-brand disabled:cursor-not-allowed disabled:bg-mist/50 disabled:text-ink/50"
                 />
               </div>
 
               <div>
                 <label
                   htmlFor="full_name"
-                  className="block text-sm font-medium text-ink"
+                  className="block text-sm font-semibold text-ink/80"
                 >
                   Nom complet *
                 </label>
@@ -365,14 +428,14 @@ export function AdminUsersScreen({
                   required
                   value={formData.full_name}
                   onChange={handleInputChange}
-                  className="mt-1 block w-full rounded-md border border-line px-3 py-2 text-ink shadow-sm focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"
+                  className="mt-1 block w-full rounded-xl border border-line bg-white px-4 py-2.5 text-sm text-ink outline-none transition focus:border-brand"
                 />
               </div>
 
               <div>
                 <label
                   htmlFor="role"
-                  className="block text-sm font-medium text-ink"
+                  className="block text-sm font-semibold text-ink/80"
                 >
                   Rol *
                 </label>
@@ -382,7 +445,7 @@ export function AdminUsersScreen({
                   required
                   value={formData.role}
                   onChange={handleInputChange}
-                  className="mt-1 block w-full rounded-md border border-line px-3 py-2 text-ink shadow-sm focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"
+                  className="mt-1 block w-full rounded-xl border border-line bg-white px-4 py-2.5 text-sm text-ink outline-none transition focus:border-brand"
                 >
                   <option value="worker">Treballador</option>
                   <option value="admin">Administrador</option>
@@ -392,7 +455,7 @@ export function AdminUsersScreen({
               <div>
                 <label
                   htmlFor="department"
-                  className="block text-sm font-medium text-ink"
+                  className="block text-sm font-semibold text-ink/80"
                 >
                   Departament
                 </label>
@@ -402,14 +465,14 @@ export function AdminUsersScreen({
                   name="department"
                   value={formData.department}
                   onChange={handleInputChange}
-                  className="mt-1 block w-full rounded-md border border-line px-3 py-2 text-ink shadow-sm focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"
+                  className="mt-1 block w-full rounded-xl border border-line bg-white px-4 py-2.5 text-sm text-ink outline-none transition focus:border-brand"
                 />
               </div>
 
               <div>
                 <label
                   htmlFor="weekly_hours"
-                  className="block text-sm font-medium text-ink"
+                  className="block text-sm font-semibold text-ink/80"
                 >
                   Hores setmanals *
                 </label>
@@ -422,7 +485,7 @@ export function AdminUsersScreen({
                   step="0.5"
                   value={formData.weekly_hours}
                   onChange={handleInputChange}
-                  className="mt-1 block w-full rounded-md border border-line px-3 py-2 text-ink shadow-sm focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"
+                  className="mt-1 block w-full rounded-xl border border-line bg-white px-4 py-2.5 text-sm text-ink outline-none transition focus:border-brand"
                 />
               </div>
 
@@ -430,7 +493,7 @@ export function AdminUsersScreen({
                 <div>
                   <label
                     htmlFor="password"
-                    className="block text-sm font-medium text-ink"
+                    className="block text-sm font-semibold text-ink/80"
                   >
                     Contrasenya (opcional)
                   </label>
@@ -441,7 +504,7 @@ export function AdminUsersScreen({
                     value={formData.password}
                     onChange={handleInputChange}
                     placeholder="Es generarà una temporal si es deixa buit"
-                    className="mt-1 block w-full rounded-md border border-line px-3 py-2 text-ink shadow-sm focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"
+                    className="mt-1 block w-full rounded-xl border border-line bg-white px-4 py-2.5 text-sm text-ink outline-none transition focus:border-brand"
                   />
                 </div>
               )}
@@ -466,6 +529,244 @@ export function AdminUsersScreen({
           </Card>
         </div>
       )}
+
+      {/* Modal de credencials d'usuari nou */}
+      {newUserCredentials && (
+        <NewUserCredentialsModal
+          email={newUserCredentials.email}
+          password={newUserCredentials.password}
+          onClose={() => setNewUserCredentials(null)}
+        />
+      )}
+
+      {/* Modal de reactivació */}
+      {userToReactivate && (
+        <ReactivateModal
+          user={userToReactivate}
+          loading={loading}
+          onCancel={() => setUserToReactivate(null)}
+          onConfirm={(generateNewPassword) => handleReactivate(userToReactivate.id, generateNewPassword)}
+        />
+      )}
+
+      {/* Modal de confirmació de baixa */}
+      {userToDeactivate && (
+        <DeactivateConfirmModal
+          user={userToDeactivate}
+          loading={loading}
+          onCancel={() => setUserToDeactivate(null)}
+          onConfirm={() => handleDelete(userToDeactivate.id)}
+        />
+      )}
+    </div>
+  );
+}
+
+type DeactivateConfirmModalProps = {
+  user: UserListItem;
+  loading: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+};
+
+function DeactivateConfirmModal({ user, loading, onCancel, onConfirm }: DeactivateConfirmModalProps) {
+  useEscapeKey(onCancel);
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+      <Card className="w-full max-w-sm bg-white p-6">
+        <div className="flex flex-col items-center gap-4 text-center">
+          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-danger-soft">
+            <svg
+              className="h-7 w-7 text-danger"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2}
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"
+              />
+            </svg>
+          </div>
+          <div>
+            <h3 className="font-serif text-xl text-ink">Donar de baixa</h3>
+            <p className="mt-1 text-sm text-ink/60">
+              L&apos;usuari perdrà l&apos;accés a l&apos;aplicació. Podràs tornar-lo a activar quan vulguis.
+            </p>
+          </div>
+          <div className="w-full rounded-xl border border-line bg-mist/40 px-4 py-3 text-left">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-danger-soft text-base font-bold text-danger">
+                {user.full_name.charAt(0).toUpperCase()}
+              </div>
+              <div>
+                <p className="font-semibold text-ink">{user.full_name}</p>
+                <p className="text-xs text-ink/50">{user.email}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className="mt-6 flex gap-3">
+          <Button
+            variant="secondary"
+            className="flex-1"
+            onClick={onCancel}
+            disabled={loading}
+          >
+            Cancel·lar
+          </Button>
+          <Button
+            className="flex-1 bg-danger text-white hover:bg-danger/90"
+            onClick={onConfirm}
+            disabled={loading}
+          >
+            {loading ? "Desactivant..." : "Donar de baixa"}
+          </Button>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+type NewUserCredentialsModalProps = {
+  email: string;
+  password: string;
+  onClose: () => void;
+};
+
+function NewUserCredentialsModal({ email, password, onClose }: NewUserCredentialsModalProps) {
+  useEscapeKey(onClose);
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(password);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+      <Card className="w-full max-w-sm bg-white p-6">
+        <div className="flex flex-col items-center gap-4 text-center">
+          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-success-soft">
+            <svg
+              className="h-7 w-7 text-success"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2}
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <div>
+            <h3 className="font-serif text-xl text-ink">Usuari creat</h3>
+            <p className="mt-1 text-sm text-ink/60">
+              Guarda aquestes credencials abans de tancar. No es tornaran a mostrar.
+            </p>
+          </div>
+          <div className="w-full space-y-2 rounded-xl border border-line bg-mist/40 px-4 py-3 text-left text-sm">
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wider text-ink/40">Correu</p>
+              <p className="mt-0.5 font-medium text-ink">{email}</p>
+            </div>
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wider text-ink/40">Contrasenya temporal</p>
+              <div className="mt-0.5 flex items-center gap-2">
+                <p className="flex-1 font-mono font-semibold text-ink">{password}</p>
+                <button
+                  onClick={handleCopy}
+                  className="shrink-0 rounded-lg border border-line px-2.5 py-1 text-xs font-medium text-ink/60 transition hover:bg-mist"
+                >
+                  {copied ? "Copiat!" : "Copiar"}
+                </button>
+              </div>
+            </div>
+          </div>
+          <p className="text-xs text-ink/40">
+            L&apos;usuari haurà de canviar la contrasenya en el primer accés.
+          </p>
+        </div>
+        <div className="mt-4">
+          <Button className="w-full" onClick={onClose}>
+            Entès, ja ho he apuntat
+          </Button>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+type ReactivateModalProps = {
+  user: UserListItem;
+  loading: boolean;
+  onCancel: () => void;
+  onConfirm: (generateNewPassword: boolean) => void;
+};
+
+function ReactivateModal({ user, loading, onCancel, onConfirm }: ReactivateModalProps) {
+  useEscapeKey(onCancel);
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+      <Card className="w-full max-w-sm bg-white p-6">
+        <div className="flex flex-col items-center gap-4 text-center">
+          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-success-soft">
+            <svg
+              className="h-7 w-7 text-success"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2}
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+            </svg>
+          </div>
+          <div>
+            <h3 className="font-serif text-xl text-ink">Activar usuari</h3>
+            <p className="mt-1 text-sm text-ink/60">
+              Vols generar una contrasenya temporal nova per a aquest usuari?
+            </p>
+          </div>
+          <div className="w-full rounded-xl border border-line bg-mist/40 px-4 py-3 text-left">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-success-soft text-base font-bold text-success">
+                {user.full_name.charAt(0).toUpperCase()}
+              </div>
+              <div>
+                <p className="font-semibold text-ink">{user.full_name}</p>
+                <p className="text-xs text-ink/50">{user.email}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className="mt-6 flex flex-col gap-2">
+          <Button
+            className="w-full"
+            onClick={() => onConfirm(true)}
+            disabled={loading}
+          >
+            {loading ? "Activant..." : "Activar i generar nova contrasenya"}
+          </Button>
+          <Button
+            variant="secondary"
+            className="w-full"
+            onClick={() => onConfirm(false)}
+            disabled={loading}
+          >
+            Activar sense canviar contrasenya
+          </Button>
+          <Button
+            variant="secondary"
+            className="w-full text-ink/50"
+            onClick={onCancel}
+            disabled={loading}
+          >
+            Cancel·lar
+          </Button>
+        </div>
+      </Card>
     </div>
   );
 }

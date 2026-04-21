@@ -1,12 +1,26 @@
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { APP_TIME_ZONE, getDateKey } from "@/lib/utils/time";
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+export async function GET() {
+  return NextResponse.json({ status: "ok" });
+}
 
 export async function POST(request: NextRequest) {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!supabaseUrl || !supabaseServiceKey) {
+    return NextResponse.json(
+      { error: "Missing configuration variables" },
+      { status: 500 }
+    );
+  }
+
+  const supabase = createClient(supabaseUrl, supabaseServiceKey);
   try {
     const authHeader = request.headers.get("authorization");
     if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
@@ -16,7 +30,7 @@ export async function POST(request: NextRequest) {
     const now = new Date();
     const yesterday = new Date(now);
     yesterday.setDate(yesterday.getDate() - 1);
-    const yesterdayStr = yesterday.toISOString().split("T")[0];
+    const yesterdayStr = getDateKey(yesterday, APP_TIME_ZONE);
 
     const startOfYesterday = `${yesterdayStr}T00:00:00.000Z`;
     const endOfYesterday = `${yesterdayStr}T23:59:59.999Z`;
@@ -41,15 +55,20 @@ export async function POST(request: NextRequest) {
     }
 
     const userIds = openEntries.map((e) => e.user_id);
-    const { data: users } = await supabase
+    const { data: profiles } = await supabase
       .from("profiles")
-      .select("id, full_name, email")
+      .select("id, full_name")
       .in("id", userIds);
 
+    const { data: authUsersData } = await supabase.auth.admin.listUsers();
+    const authEmailMap = new Map(
+      (authUsersData?.users ?? []).map((u) => [u.id, u.email ?? ""])
+    );
+
     const userMap = new Map(
-      (users ?? []).map((u) => [
+      (profiles ?? []).map((u) => [
         u.id,
-        { full_name: u.full_name, email: u.email ?? "" }
+        { full_name: u.full_name, email: authEmailMap.get(u.id) ?? "" }
       ])
     );
 

@@ -87,8 +87,8 @@ function buildDaySummary(
     editReason: editReason || null,
     absence: absence
       ? {
-          type: absence.absence_type as any,
-          status: absence.status as any,
+          type: absence.absence_type as "sick" | "personal" | "other",
+          status: absence.status as "pending" | "approved" | "rejected",
           reason: absence.reason
         }
       : null
@@ -114,13 +114,11 @@ async function getBreaksForUsersInRange(
     throw new Error(`Error obtenint IDs d'entrades: ${entriesError.message}`);
   }
 
-  const entries = entriesData as Array<{ id: string }> | null;
-
-  if (!entries || entries.length === 0) {
+  if (!entriesData || entriesData.length === 0) {
     return [];
   }
 
-  const entryIds = entries.map((e) => e.id);
+  const entryIds = entriesData.map((e) => e.id);
 
   const { data: breaksData, error: breaksError } = await supabase
     .from("breaks")

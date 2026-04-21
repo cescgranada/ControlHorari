@@ -7,6 +7,22 @@ import { Card } from "@/components/ui/card";
 import { updateAbsenceStatusAction } from "@/features/absences/actions";
 import type { PendingAbsence } from "@/server/services/team.service";
 
+function getAbsenceTypeLabel(type: PendingAbsence["type"]): string {
+  switch (type) {
+    case "sick": return "Baixa mèdica";
+    case "personal": return "Dia personal";
+    case "other": return "Altre motiu";
+  }
+}
+
+function getAbsenceTypeTone(type: PendingAbsence["type"]) {
+  switch (type) {
+    case "sick": return "danger" as const;
+    case "personal": return "brand" as const;
+    case "other": return "pause" as const;
+  }
+}
+
 type AdminAbsenceManagementProps = {
   pendingAbsences: PendingAbsence[];
 };
@@ -16,19 +32,19 @@ export function AdminAbsenceManagement({
 }: AdminAbsenceManagementProps) {
   const [absences, setAbsences] = useState(initialAbsences);
   const [loadingId, setLoadingId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const handleStatusUpdate = async (
     id: string,
     status: "approved" | "rejected"
   ) => {
     setLoadingId(id);
+    setError(null);
     try {
       await updateAbsenceStatusAction(id, status);
-      // Remove from list on success
       setAbsences((prev) => prev.filter((a) => a.id !== id));
-    } catch (error) {
-      console.error("Error updating absence status:", error);
-      alert("Error al processar la sol·licitud.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error al processar la sol·licitud.");
     } finally {
       setLoadingId(null);
     }
@@ -47,6 +63,12 @@ export function AdminAbsenceManagement({
         </h2>
       </div>
 
+      {error && (
+        <div className="mb-4 rounded-xl border border-danger/20 bg-danger-soft/50 px-4 py-3 text-sm text-danger">
+          {error}
+        </div>
+      )}
+
       <div className="grid gap-4">
         {absences.map((absence) => (
           <div
@@ -60,6 +82,9 @@ export function AdminAbsenceManagement({
               <div>
                 <div className="flex items-center gap-2">
                   <p className="font-bold text-ink">{absence.userName}</p>
+                  <Badge tone={getAbsenceTypeTone(absence.type)}>
+                    {getAbsenceTypeLabel(absence.type)}
+                  </Badge>
                 </div>
                 <div className="mt-1 flex items-center gap-3">
                   <p className="font-serif text-xl text-ink">

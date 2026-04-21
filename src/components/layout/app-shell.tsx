@@ -1,13 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
 import { appNavigation } from "@/lib/constants/navigation";
 import { routes } from "@/lib/constants/navigation";
 import { logoutAction } from "@/features/auth/actions";
+import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { AppRole } from "@/types/domain";
 
 type AppShellProps = {
@@ -53,7 +54,29 @@ function getPageTitle(pathname: string): { title: string; subtitle: string } {
 
 export function AppShell({ children, email, role, userName }: AppShellProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sessionExpired, setSessionExpired] = useState(false);
   const pathname = usePathname();
+  const router = useRouter();
+
+  useEffect(() => {
+    const supabase = createSupabaseBrowserClient();
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "TOKEN_REFRESH_FAILED") {
+        setSessionExpired(true);
+        setTimeout(() => router.push(routes.login), 3000);
+        return;
+      }
+      if (event === "SIGNED_OUT" || event === "TOKEN_REFRESHED") {
+        supabase.auth.getSession().then(({ data: { session } }) => {
+          if (!session) {
+            setSessionExpired(true);
+            setTimeout(() => router.push(routes.login), 3000);
+          }
+        });
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, [router]);
   const pageInfo = getPageTitle(pathname);
   const isAdmin = role === "admin";
 
@@ -206,6 +229,11 @@ export function AppShell({ children, email, role, userName }: AppShellProps) {
 
   return (
     <div className="min-h-screen bg-transparent px-4 py-4 sm:px-6 lg:px-8">
+      {sessionExpired && (
+        <div className="fixed inset-x-0 top-0 z-[100] flex items-center justify-center bg-danger px-4 py-3 text-sm font-semibold text-white shadow-lg">
+          La sessió ha caducat. Redirigint a l&apos;inici de sessió...
+        </div>
+      )}
       {/* Mobile header */}
       <header className="mb-4 flex items-center justify-between rounded-[1.75rem] border border-white/70 bg-white/85 p-4 shadow-panel backdrop-blur lg:hidden">
         <div>

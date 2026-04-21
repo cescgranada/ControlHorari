@@ -1,4 +1,5 @@
 import { ReportsScreen } from "@/features/reports/components/reports-screen";
+import { getDateKey, APP_TIME_ZONE } from "@/lib/utils/time";
 import { requireUser } from "@/server/services/auth.service";
 import {
   getReportSnapshot,
@@ -64,20 +65,23 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
           : [currentUserId];
 
     const now = new Date();
-    const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    const todayStr = getDateKey(now, APP_TIME_ZONE);
+    const [yr, mo] = todayStr.split("-").map(Number) as [number, number];
+    const lastDay = new Date(yr, mo, 0).getDate();
+    const defaultFrom = `${yr}-${String(mo).padStart(2, "0")}-01`;
+    const defaultTo = `${yr}-${String(mo).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
 
     const from = searchParams?.from
       ? Array.isArray(searchParams.from)
         ? searchParams.from[0]
         : searchParams.from
-      : firstDayOfMonth.toISOString().split("T")[0];
+      : defaultFrom;
 
     const to = searchParams?.to
       ? Array.isArray(searchParams.to)
         ? searchParams.to[0]
         : searchParams.to
-      : lastDayOfMonth.toISOString().split("T")[0];
+      : defaultTo;
 
     const period = searchParams?.period ?? "month";
 

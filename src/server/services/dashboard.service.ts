@@ -112,7 +112,8 @@ function buildWeekSummary(
 }
 
 export async function getDashboardSnapshot(
-  userId: string
+  userId: string,
+  weeklyHours = 30
 ): Promise<DashboardSnapshot> {
   const from = new Date();
   from.setDate(from.getDate() - 14);
@@ -131,9 +132,7 @@ export async function getDashboardSnapshot(
     getRecentAbsencesForUser(userId, fromShort.toISOString())
   ]);
 
-  const entryIds = ((recentEntries as any[]) || []).map(
-    (entry: any) => entry.id
-  );
+  const entryIds = (recentEntries ?? []).map((entry) => entry.id);
 
   const [{ data: recentBreaks }, { data: activeBreak }] = await Promise.all([
     getBreaksForEntries(entryIds),
@@ -150,7 +149,7 @@ export async function getDashboardSnapshot(
   const groupedBreaks = new Map<string, BreakListItem[]>();
   const entryDateById = new Map<string, string>();
 
-  for (const entry of (recentEntries as any[]) ?? []) {
+  for (const entry of recentEntries ?? []) {
     const entryDateKey = getDateKey(entry.clock_in, APP_TIME_ZONE);
     const dayEntries = groupedEntries.get(entryDateKey) ?? [];
 
@@ -192,6 +191,7 @@ export async function getDashboardSnapshot(
 
   return {
     status,
+    weeklyHours,
     activeEntry: activeEntry
       ? {
           id: activeEntry.id,
@@ -208,7 +208,7 @@ export async function getDashboardSnapshot(
       : null,
     today,
     week,
-    absences: ((recentAbsences as any[]) || []).map((a: any) => ({
+    absences: (recentAbsences ?? []).map((a) => ({
       id: a.id,
       date: a.absence_date,
       type: a.absence_type as "sick" | "personal" | "other",

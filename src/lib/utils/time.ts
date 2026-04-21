@@ -135,4 +135,24 @@ export function toDateInputValue(value: Date | string) {
   return getDateKey(value, APP_TIME_ZONE);
 }
 
+export function localToISO(dateStr: string, timeStr: string, timeZone = APP_TIME_ZONE): string {
+  // Treat the local datetime as UTC to parse it, then correct for the actual TZ offset
+  const naive = new Date(`${dateStr}T${timeStr}:00Z`);
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false
+  }).formatToParts(naive);
+  const v = (t: string) => parts.find((p) => p.type === t)?.value ?? "00";
+  const tzMillis = Date.parse(
+    `${v("year")}-${v("month")}-${v("day")}T${v("hour")}:${v("minute")}:${v("second")}Z`
+  );
+  return new Date(naive.getTime() - (tzMillis - naive.getTime())).toISOString();
+}
+
 export { APP_TIME_ZONE };

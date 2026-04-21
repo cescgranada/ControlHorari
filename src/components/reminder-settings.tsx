@@ -33,15 +33,17 @@ export function ReminderSettings({
 }: ReminderSettingsProps) {
   const [enabled, setEnabled] = useState(initialEnabled);
   const [saving, setSaving] = useState(false);
+  const [permissionError, setPermissionError] = useState(false);
   const { isSupported, permission, requestPermission } = useNotifications();
 
   const handleToggle = async () => {
     setSaving(true);
+    setPermissionError(false);
     try {
       if (!enabled && permission !== "granted") {
         const granted = await requestPermission();
         if (!granted) {
-          alert("Cal activar les notificacions per usar els recordatoris.");
+          setPermissionError(true);
           setSaving(false);
           return;
         }
@@ -104,7 +106,13 @@ export function ReminderSettings({
           </p>
         )}
 
-        {permission === "default" && !enabled && (
+        {permissionError && permission !== "denied" && (
+          <p className="mt-2 text-sm text-danger">
+            Cal concedir permís de notificacions per activar els recordatoris.
+          </p>
+        )}
+
+        {permission === "default" && !enabled && !permissionError && (
           <p className="mt-2 text-sm text-ink/50">
             Activa el toggle i concedeix permís per començar a rebre
             recordatoris.

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useEscapeKey } from "@/hooks/use-escape-key";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -12,6 +13,7 @@ import {
   createManualEntryForUserAction,
   deleteEntryAction
 } from "@/features/admin/actions";
+import { APP_TIME_ZONE, getDateKey, formatTime } from "@/lib/utils/time";
 
 type AdminEntriesScreenProps = {
   users: UserListItem[];
@@ -19,11 +21,12 @@ type AdminEntriesScreenProps = {
 
 export function AdminEntriesScreen({ users }: AdminEntriesScreenProps) {
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
-  const [fromDate, setFromDate] = useState<string>(
-    new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0]
-  );
-  const [toDate, setToDate] = useState<string>(
-    new Date().toISOString().split("T")[0]
+  const [fromDate, setFromDate] = useState<string>(() => {
+    const d = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    return getDateKey(d, APP_TIME_ZONE);
+  });
+  const [toDate, setToDate] = useState<string>(() =>
+    getDateKey(new Date(), APP_TIME_ZONE)
   );
   const [entries, setEntries] = useState<TimeEntryHistoryItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -32,6 +35,8 @@ export function AdminEntriesScreen({ users }: AdminEntriesScreenProps) {
     null
   );
   const [newEntryOpen, setNewEntryOpen] = useState(false);
+  const [entryToDelete, setEntryToDelete] = useState<TimeEntryHistoryItem | null>(null);
+  const [hasSearched, setHasSearched] = useState(false);
 
   const selectedUser = users.find((u) => u.id === selectedUserId);
 
@@ -40,14 +45,15 @@ export function AdminEntriesScreen({ users }: AdminEntriesScreenProps) {
     setLoading(true);
     setError(null);
     try {
-      const fromIso = new Date(fromDate).toISOString();
-      const toIso = new Date(toDate).toISOString();
+      const fromIso = `${fromDate}T00:00:00.000Z`;
+      const toIso = `${toDate}T23:59:59.999Z`;
       const data = await getEntriesForUserAction(
         selectedUserId,
         fromIso,
         toIso
       );
       setEntries(data);
+      setHasSearched(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error carregant entrades");
     } finally {
@@ -93,12 +99,15 @@ export function AdminEntriesScreen({ users }: AdminEntriesScreenProps) {
   }
 
   async function handleDeleteEntry(entryId: string) {
-    if (!confirm("Estàs segur que vols eliminar aquesta entrada?")) return;
+    setLoading(true);
     try {
       await deleteEntryAction(entryId);
+      setEntryToDelete(null);
       await loadEntries();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error eliminant entrada");
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -131,7 +140,7 @@ export function AdminEntriesScreen({ users }: AdminEntriesScreenProps) {
               id="user"
               value={selectedUserId ?? ""}
               onChange={(e) => setSelectedUserId(e.target.value || null)}
-              className="mt-1 block w-full rounded-md border border-line px-3 py-2 text-ink shadow-sm focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"
+              className="mt-1 block w-full rounded-xl border border-line bg-white px-4 py-2.5 text-sm text-ink outline-none transition focus:border-brand"
             >
               <option value="">Selecciona un usuari</option>
               {users.map((user) => (
@@ -154,7 +163,7 @@ export function AdminEntriesScreen({ users }: AdminEntriesScreenProps) {
               id="from"
               value={fromDate}
               onChange={(e) => setFromDate(e.target.value)}
-              className="mt-1 block w-full rounded-md border border-line px-3 py-2 text-ink shadow-sm focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"
+              className="mt-1 block w-full rounded-xl border border-line bg-white px-4 py-2.5 text-sm text-ink outline-none transition focus:border-brand"
             />
           </div>
 
@@ -167,7 +176,7 @@ export function AdminEntriesScreen({ users }: AdminEntriesScreenProps) {
               id="to"
               value={toDate}
               onChange={(e) => setToDate(e.target.value)}
-              className="mt-1 block w-full rounded-md border border-line px-3 py-2 text-ink shadow-sm focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"
+              className="mt-1 block w-full rounded-xl border border-line bg-white px-4 py-2.5 text-sm text-ink outline-none transition focus:border-brand"
             />
           </div>
 
@@ -196,7 +205,37 @@ export function AdminEntriesScreen({ users }: AdminEntriesScreenProps) {
         </div>
       )}
 
-      {selectedUser && entries.length > 0 && (
+      {loading && (
+        <Card className="bg-white/90 shadow-panel">
+          <div className="mb-4 h-7 w-48 animate-pulse rounded-lg bg-mist" />
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-line">
+              <thead>
+                <tr>
+                  {["Data", "Entrada", "Sortida", "Manual", "GPS", "Motiu", "Accions"].map((h) => (
+                    <th key={h} className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-ink/65">
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-line">
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <tr key={i}>
+                    {Array.from({ length: 7 }).map((_, j) => (
+                      <td key={j} className="px-4 py-3">
+                        <div className="h-4 animate-pulse rounded bg-mist" style={{ width: j === 5 ? "80%" : j === 6 ? "100%" : "60%" }} />
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+
+      {!loading && selectedUser && entries.length > 0 && (
         <Card className="bg-white/90 shadow-panel">
           <h3 className="font-serif text-2xl text-ink">
             Entrades de {selectedUser.full_name}
@@ -218,6 +257,9 @@ export function AdminEntriesScreen({ users }: AdminEntriesScreenProps) {
                     Manual
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-ink/65">
+                    GPS
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-ink/65">
                     Motiu
                   </th>
                   <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-ink/65">
@@ -229,24 +271,42 @@ export function AdminEntriesScreen({ users }: AdminEntriesScreenProps) {
                 {entries.map((entry) => (
                   <tr key={entry.id}>
                     <td className="whitespace-nowrap px-4 py-3 text-sm text-ink">
-                      {new Date(entry.clock_in).toLocaleDateString("ca")}
+                      {getDateKey(entry.clock_in, APP_TIME_ZONE)}
                     </td>
                     <td className="whitespace-nowrap px-4 py-3 text-sm text-ink">
-                      {new Date(entry.clock_in).toLocaleTimeString("ca", {
-                        hour: "2-digit",
-                        minute: "2-digit"
-                      })}
+                      {formatTime(entry.clock_in)}
                     </td>
                     <td className="whitespace-nowrap px-4 py-3 text-sm text-ink">
-                      {entry.clock_out
-                        ? new Date(entry.clock_out).toLocaleTimeString("ca", {
-                            hour: "2-digit",
-                            minute: "2-digit"
-                          })
-                        : "-"}
+                      {formatTime(entry.clock_out) ?? "-"}
                     </td>
                     <td className="whitespace-nowrap px-4 py-3 text-sm text-ink">
                       {entry.is_manual ? "Sí" : "No"}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3 text-sm">
+                      <span
+                        title={
+                          entry.clock_in_lat && entry.clock_in_lng && entry.clock_out_lat && entry.clock_out_lng
+                            ? "Entrada i sortida geolocalitzades"
+                            : entry.clock_in_lat && entry.clock_in_lng
+                              ? "Entrada geolocalitzada"
+                              : entry.clock_out_lat && entry.clock_out_lng
+                                ? "Sortida geolocalitzada"
+                                : "Sense geolocalització"
+                        }
+                        className={
+                          (entry.clock_in_lat && entry.clock_in_lng) || (entry.clock_out_lat && entry.clock_out_lng)
+                            ? "font-medium text-success"
+                            : "text-ink/35"
+                        }
+                      >
+                        {entry.clock_in_lat && entry.clock_in_lng && entry.clock_out_lat && entry.clock_out_lng
+                          ? "E+S"
+                          : entry.clock_in_lat && entry.clock_in_lng
+                            ? "E"
+                            : entry.clock_out_lat && entry.clock_out_lng
+                              ? "S"
+                              : "—"}
+                      </span>
                     </td>
                     <td className="max-w-xs truncate px-4 py-3 text-sm text-ink">
                       {entry.edit_reason || "-"}
@@ -262,7 +322,7 @@ export function AdminEntriesScreen({ users }: AdminEntriesScreenProps) {
                       <Button
                         variant="secondary"
                         className="border-danger/20 text-danger hover:bg-danger-soft/70"
-                        onClick={() => handleDeleteEntry(entry.id)}
+                        onClick={() => setEntryToDelete(entry)}
                       >
                         Eliminar
                       </Button>
@@ -275,7 +335,7 @@ export function AdminEntriesScreen({ users }: AdminEntriesScreenProps) {
         </Card>
       )}
 
-      {selectedUser && entries.length === 0 && !loading && (
+      {!loading && hasSearched && selectedUser && entries.length === 0 && (
         <Card className="bg-white/90 shadow-panel">
           <p className="text-ink/70">
             No s&apos;han trobat entrades per a l&apos;usuari seleccionat i el
@@ -300,6 +360,88 @@ export function AdminEntriesScreen({ users }: AdminEntriesScreenProps) {
           onSave={handleCreateEntry}
         />
       )}
+
+      {/* Modal de confirmació d'eliminació */}
+      {entryToDelete && (
+        <DeleteConfirmModal
+          entry={entryToDelete}
+          loading={loading}
+          onCancel={() => setEntryToDelete(null)}
+          onConfirm={() => handleDeleteEntry(entryToDelete.id)}
+        />
+      )}
+    </div>
+  );
+}
+
+type DeleteConfirmModalProps = {
+  entry: TimeEntryHistoryItem;
+  loading: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+};
+
+function DeleteConfirmModal({ entry, loading, onCancel, onConfirm }: DeleteConfirmModalProps) {
+  useEscapeKey(onCancel);
+  const date = getDateKey(entry.clock_in, APP_TIME_ZONE);
+  const clockIn = formatTime(entry.clock_in);
+  const clockOut = entry.clock_out ? formatTime(entry.clock_out) : "sense sortida";
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+      <Card className="w-full max-w-sm bg-white p-6">
+        <div className="flex flex-col items-center gap-4 text-center">
+          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-danger-soft">
+            <svg
+              className="h-7 w-7 text-danger"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2}
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"
+              />
+            </svg>
+          </div>
+          <div>
+            <h3 className="font-serif text-xl text-ink">Eliminar entrada</h3>
+            <p className="mt-1 text-sm text-ink/60">
+              Aquesta acció no es pot desfer.
+            </p>
+          </div>
+          <div className="w-full rounded-xl border border-line bg-mist/40 px-4 py-3 text-left text-sm">
+            <p className="font-medium capitalize text-ink">{date}</p>
+            <p className="mt-0.5 text-ink/60">
+              {clockIn} → {clockOut}
+            </p>
+            {entry.edit_reason && (
+              <p className="mt-1 text-xs italic text-ink/50">
+                &ldquo;{entry.edit_reason}&rdquo;
+              </p>
+            )}
+          </div>
+        </div>
+        <div className="mt-6 flex gap-3">
+          <Button
+            variant="secondary"
+            className="flex-1"
+            onClick={onCancel}
+            disabled={loading}
+          >
+            Cancel·lar
+          </Button>
+          <Button
+            className="flex-1 bg-danger text-white hover:bg-danger/90"
+            onClick={onConfirm}
+            disabled={loading}
+          >
+            {loading ? "Eliminant..." : "Eliminar"}
+          </Button>
+        </div>
+      </Card>
     </div>
   );
 }
@@ -315,12 +457,17 @@ type EditEntryModalProps = {
   ) => Promise<void>;
 };
 
+function toLocalDateTime(isoString: string): string {
+  const date = new Date(isoString);
+  const offset = date.getTimezoneOffset();
+  return new Date(date.getTime() - offset * 60 * 1000).toISOString().slice(0, 16);
+}
+
 function EditEntryModal({ entry, onClose, onSave }: EditEntryModalProps) {
-  const [clockIn, setClockIn] = useState<string>(
-    new Date(entry.clock_in).toISOString().slice(0, 16)
-  );
+  useEscapeKey(onClose);
+  const [clockIn, setClockIn] = useState<string>(toLocalDateTime(entry.clock_in));
   const [clockOut, setClockOut] = useState<string>(
-    entry.clock_out ? new Date(entry.clock_out).toISOString().slice(0, 16) : ""
+    entry.clock_out ? toLocalDateTime(entry.clock_out) : ""
   );
   const [reason, setReason] = useState<string>(entry.edit_reason || "");
   const [loading, setLoading] = useState(false);
@@ -339,8 +486,8 @@ function EditEntryModal({ entry, onClose, onSave }: EditEntryModalProps) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <Card className="w-full max-w-md bg-white p-6">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
+      <Card className="w-full max-w-md bg-white p-6" onClick={(e) => e.stopPropagation()}>
         <h3 className="font-serif text-2xl text-ink">Editar entrada</h3>
         <form onSubmit={handleSubmit} className="mt-6 space-y-4">
           <div>
@@ -352,7 +499,7 @@ function EditEntryModal({ entry, onClose, onSave }: EditEntryModalProps) {
               value={clockIn}
               onChange={(e) => setClockIn(e.target.value)}
               required
-              className="mt-1 block w-full rounded-md border border-line px-3 py-2 text-ink shadow-sm focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"
+              className="mt-1 block w-full rounded-xl border border-line bg-white px-4 py-2.5 text-sm text-ink outline-none transition focus:border-brand"
             />
           </div>
           <div>
@@ -363,7 +510,7 @@ function EditEntryModal({ entry, onClose, onSave }: EditEntryModalProps) {
               type="datetime-local"
               value={clockOut}
               onChange={(e) => setClockOut(e.target.value)}
-              className="mt-1 block w-full rounded-md border border-line px-3 py-2 text-ink shadow-sm focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"
+              className="mt-1 block w-full rounded-xl border border-line bg-white px-4 py-2.5 text-sm text-ink outline-none transition focus:border-brand"
             />
           </div>
           <div>
@@ -375,7 +522,8 @@ function EditEntryModal({ entry, onClose, onSave }: EditEntryModalProps) {
               onChange={(e) => setReason(e.target.value)}
               required
               rows={3}
-              className="mt-1 block w-full rounded-md border border-line px-3 py-2 text-ink shadow-sm focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"
+              placeholder="Explica per què s'ha de corregir aquesta entrada..."
+              className="mt-1 block w-full rounded-xl border border-line bg-white px-4 py-2.5 text-sm text-ink outline-none transition focus:border-brand placeholder:text-ink/35"
             />
           </div>
           <div className="mt-6 flex justify-end gap-3">
@@ -407,9 +555,8 @@ type NewEntryModalProps = {
 };
 
 function NewEntryModal({ onClose, onSave }: NewEntryModalProps) {
-  const [date, setDate] = useState<string>(
-    new Date().toISOString().split("T")[0]
-  );
+  useEscapeKey(onClose);
+  const [date, setDate] = useState<string>(() => getDateKey(new Date(), APP_TIME_ZONE));
   const [clockInTime, setClockInTime] = useState<string>("08:00");
   const [clockOutTime, setClockOutTime] = useState<string>("");
   const [reason, setReason] = useState<string>("");
@@ -428,8 +575,8 @@ function NewEntryModal({ onClose, onSave }: NewEntryModalProps) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <Card className="w-full max-w-md bg-white p-6">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
+      <Card className="w-full max-w-md bg-white p-6" onClick={(e) => e.stopPropagation()}>
         <h3 className="font-serif text-2xl text-ink">Crear entrada manual</h3>
         <form onSubmit={handleSubmit} className="mt-6 space-y-4">
           <div>
@@ -439,7 +586,7 @@ function NewEntryModal({ onClose, onSave }: NewEntryModalProps) {
               value={date}
               onChange={(e) => setDate(e.target.value)}
               required
-              className="mt-1 block w-full rounded-md border border-line px-3 py-2 text-ink shadow-sm focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"
+              className="mt-1 block w-full rounded-xl border border-line bg-white px-4 py-2.5 text-sm text-ink outline-none transition focus:border-brand"
             />
           </div>
           <div className="grid grid-cols-2 gap-4">
@@ -452,7 +599,7 @@ function NewEntryModal({ onClose, onSave }: NewEntryModalProps) {
                 value={clockInTime}
                 onChange={(e) => setClockInTime(e.target.value)}
                 required
-                className="mt-1 block w-full rounded-md border border-line px-3 py-2 text-ink shadow-sm focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"
+                className="mt-1 block w-full rounded-xl border border-line bg-white px-4 py-2.5 text-sm text-ink outline-none transition focus:border-brand"
               />
             </div>
             <div>
@@ -463,7 +610,7 @@ function NewEntryModal({ onClose, onSave }: NewEntryModalProps) {
                 type="time"
                 value={clockOutTime}
                 onChange={(e) => setClockOutTime(e.target.value)}
-                className="mt-1 block w-full rounded-md border border-line px-3 py-2 text-ink shadow-sm focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"
+                className="mt-1 block w-full rounded-xl border border-line bg-white px-4 py-2.5 text-sm text-ink outline-none transition focus:border-brand"
               />
             </div>
           </div>
@@ -476,7 +623,8 @@ function NewEntryModal({ onClose, onSave }: NewEntryModalProps) {
               onChange={(e) => setReason(e.target.value)}
               required
               rows={3}
-              className="mt-1 block w-full rounded-md border border-line px-3 py-2 text-ink shadow-sm focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"
+              placeholder="Indica el motiu d'aquesta entrada manual..."
+              className="mt-1 block w-full rounded-xl border border-line bg-white px-4 py-2.5 text-sm text-ink outline-none transition focus:border-brand placeholder:text-ink/35"
             />
           </div>
           <div className="mt-6 flex justify-end gap-3">

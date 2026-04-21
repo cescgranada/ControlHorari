@@ -6,9 +6,10 @@ import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { formatDuration, formatTime } from "@/lib/utils/time";
+import { formatDuration, formatTime, getDateKey, APP_TIME_ZONE } from "@/lib/utils/time";
 import type { ReportSnapshot, UserReportSnapshot } from "@/types/domain";
 import { ReportsChart } from "./reports-chart";
+import { ReportsGeoMapButton } from "./reports-geo-map-button";
 
 type ReportsScreenProps = {
   snapshot: ReportSnapshot;
@@ -20,26 +21,40 @@ type ReportsScreenProps = {
 
 function getDatePreset(label: string): string {
   const now = new Date();
-  const year = now.getFullYear();
-  const month = now.getMonth();
+  const todayStr = getDateKey(now, APP_TIME_ZONE);
+  const [year, month] = todayStr.split("-").map(Number) as [number, number, number];
   switch (label) {
     case "today":
-      return now.toISOString().split("T")[0];
+      return todayStr;
     case "weekStart": {
-      const day = now.getDay();
+      const parts = new Intl.DateTimeFormat("en-US", {
+        timeZone: APP_TIME_ZONE,
+        weekday: "short"
+      }).formatToParts(now);
+      const weekday = parts.find((p) => p.type === "weekday")?.value ?? "Mon";
+      const dayMap: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+      const day = dayMap[weekday] ?? 1;
       const diff = day === 0 ? -6 : 1 - day;
-      const monday = new Date(now);
-      monday.setDate(now.getDate() + diff);
-      return monday.toISOString().split("T")[0];
+      const monday = new Date(now.getTime() + diff * 86400000);
+      return getDateKey(monday, APP_TIME_ZONE);
     }
     case "monthStart":
-      return new Date(year, month, 1).toISOString().split("T")[0];
-    case "monthEnd":
-      return new Date(year, month + 1, 0).toISOString().split("T")[0];
-    case "lastMonthStart":
-      return new Date(year, month - 1, 1).toISOString().split("T")[0];
-    case "lastMonthEnd":
-      return new Date(year, month, 0).toISOString().split("T")[0];
+      return `${year}-${String(month).padStart(2, "0")}-01`;
+    case "monthEnd": {
+      const lastDay = new Date(year, month, 0).getDate();
+      return `${year}-${String(month).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+    }
+    case "lastMonthStart": {
+      const lm = month === 1 ? 12 : month - 1;
+      const ly = month === 1 ? year - 1 : year;
+      return `${ly}-${String(lm).padStart(2, "0")}-01`;
+    }
+    case "lastMonthEnd": {
+      const lastDay = new Date(year, month - 1, 0).getDate();
+      const lm = month === 1 ? 12 : month - 1;
+      const ly = month === 1 ? year - 1 : year;
+      return `${ly}-${String(lm).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+    }
     default:
       return "";
   }
@@ -291,6 +306,20 @@ export function ReportsScreen({
   const csvUrl = "/api/reports/csv?" + exportParams;
   const pdfUrl = "/api/reports/pdf?" + exportParams;
 
+  const allUsersIdParam = isAdmin && users.length > 0
+    ? users.map((u) => "userId=" + u.id).join("&")
+    : "";
+  const allUsersExportParams =
+    "from=" +
+    snapshot.filters.from +
+    "&to=" +
+    snapshot.filters.to +
+    "&period=" +
+    snapshot.filters.period +
+    (allUsersIdParam ? "&" + allUsersIdParam : "");
+  const allUsersCsvUrl = "/api/reports/csv?" + allUsersExportParams;
+  const allUsersPdfUrl = "/api/reports/pdf?" + allUsersExportParams;
+
   const today = getDatePreset("today");
   const weekStart = getDatePreset("weekStart");
   const monthStart = getDatePreset("monthStart");
@@ -466,9 +495,9 @@ export function ReportsScreen({
               mesos). Redueix el rang de dates.
             </p>
           )}
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <span className="text-xs font-semibold uppercase tracking-[0.14em] text-ink/50">
-              Exportar
+              Exportar selecció
             </span>
             <Button
               variant="secondary"
@@ -488,6 +517,34 @@ export function ReportsScreen({
             >
               PDF
             </Button>
+            {isAdmin && userSnapshots.length > 0 && (
+              <ReportsGeoMapButton userSnapshots={userSnapshots} />
+            )}
+            {isAdmin && users.length > 0 && (
+              <>
+                <span className="ml-2 text-xs font-semibold uppercase tracking-[0.14em] text-ink/50">
+                  Exportar tots
+                </span>
+                <Button
+                  variant="secondary"
+                  disabled={exportRangeTooLarge}
+                  onClick={() =>
+                    !exportRangeTooLarge && window.open(allUsersCsvUrl, "_blank")
+                  }
+                >
+                  CSV tots
+                </Button>
+                <Button
+                  variant="secondary"
+                  disabled={exportRangeTooLarge}
+                  onClick={() =>
+                    !exportRangeTooLarge && window.open(allUsersPdfUrl, "_blank")
+                  }
+                >
+                  PDF tots
+                </Button>
+              </>
+            )}
           </div>
         </div>
       </Card>

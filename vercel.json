@@ -1,0 +1,12 @@
+{
+  "crons": [
+    {
+      "path": "/api/reminders",
+      "schedule": "*/15 6-10 * * 1-5"
+    },
+    {
+      "path": "/api/check-missed-clockout",
+      "schedule": "0 19 * * 1-5"
+    }
+  ]
+}

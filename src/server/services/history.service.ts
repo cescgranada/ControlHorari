@@ -18,9 +18,12 @@ import type {
   HistorySnapshot
 } from "@/types/domain";
 
+const PAGE_SIZE = 20;
+
 type RawHistoryFilters = {
   from?: string | string[];
   to?: string | string[];
+  page?: string | string[];
 };
 
 function pickFirst(value?: string | string[]) {
@@ -137,7 +140,7 @@ export async function getHistorySnapshot(
   if (entriesError) {
     throw new Error(`Error obtenint entrades: ${entriesError.message}`);
   }
-  const entryIds = ((entries as any[]) || []).map((entry: any) => entry.id);
+  const entryIds = entries.map((entry) => entry.id);
   const { data: breaks, error: breaksError } =
     await getBreaksForEntries(entryIds);
 
@@ -164,8 +167,18 @@ export async function getHistorySnapshot(
     breaksByEntryId.set(entryBreak.entry_id, existing);
   }
 
-  const historyEntries = (entries as any[]).map((entry: any) =>
+  const allHistoryEntries = entries.map((entry) =>
     buildHistoryEntry(entry, breaksByEntryId.get(entry.id) ?? [])
+  );
+
+  const rawPage = pickFirst(rawFilters?.page);
+  const page = Math.max(1, parseInt(rawPage ?? "1", 10) || 1);
+  const totalEntries = allHistoryEntries.length;
+  const totalPages = Math.max(1, Math.ceil(totalEntries / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const historyEntries = allHistoryEntries.slice(
+    (safePage - 1) * PAGE_SIZE,
+    safePage * PAGE_SIZE
   );
 
   const supabase = createClient();
@@ -178,11 +191,21 @@ export async function getHistorySnapshot(
     .gte("absence_date", filters.from)
     .lte("absence_date", filters.to);
 
-  const normalizedAbsences = ((absences as any[]) || []).map((a: any) => ({
+  type AbsenceRow = {
+    id: string;
+    absence_date: string;
+    absence_type: "sick" | "personal" | "other";
+    status: "pending" | "approved" | "rejected";
+    is_full_day: boolean;
+    start_time: string | null;
+    end_time: string | null;
+    reason: string | null;
+  };
+  const normalizedAbsences = ((absences ?? []) as AbsenceRow[]).map((a) => ({
     id: a.id,
     date: a.absence_date,
-    type: a.absence_type as "sick" | "personal" | "other",
-    status: a.status as "pending" | "approved" | "rejected",
+    type: a.absence_type,
+    status: a.status,
     isFullDay: a.is_full_day,
     startTime: a.start_time,
     endTime: a.end_time,
@@ -194,17 +217,23 @@ export async function getHistorySnapshot(
     entries: historyEntries,
     absences: normalizedAbsences,
     totals: {
-      days: historyEntries.length,
-      netMinutes: historyEntries.reduce(
-        (total: number, entry: any) => total + entry.netMinutes,
+      days: new Set(allHistoryEntries.map((e) => e.dateKey)).size,
+      netMinutes: allHistoryEntries.reduce(
+        (total, entry) => total + entry.netMinutes,
         0
       ),
-      breakMinutes: historyEntries.reduce(
-        (total: number, entry: any) => total + entry.breakMinutes,
+      breakMinutes: allHistoryEntries.reduce(
+        (total, entry) => total + entry.breakMinutes,
         0
       ),
-      incidents: historyEntries.filter((entry) => entry.status === "incident")
+      incidents: allHistoryEntries.filter((entry) => entry.status === "incident")
         .length
+    },
+    pagination: {
+      page: safePage,
+      pageSize: PAGE_SIZE,
+      totalEntries,
+      totalPages
     }
   };
 }

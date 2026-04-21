@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
+import { useEscapeKey } from "@/hooks/use-escape-key";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -78,6 +79,9 @@ export function HolidayManager({
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
+  const [holidayToDelete, setHolidayToDelete] = useState<Holiday | null>(null);
+  const closeModal = useCallback(() => setHolidayToDelete(null), []);
+  useEscapeKey(closeModal);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -99,11 +103,14 @@ export function HolidayManager({
     }
   };
 
-  const handleDelete = async (id: string) => {
+  const handleDeleteConfirm = async () => {
+    if (!holidayToDelete) return;
     try {
-      await onDelete(id);
+      await onDelete(holidayToDelete.id);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error al eliminar.");
+    } finally {
+      setHolidayToDelete(null);
     }
   };
 
@@ -118,6 +125,35 @@ export function HolidayManager({
   );
 
   return (
+    <>
+    {holidayToDelete && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+        <div className="w-full max-w-sm rounded-3xl border border-white/70 bg-white p-6 shadow-panel">
+          <h3 className="font-serif text-xl text-ink">Eliminar festiu</h3>
+          <p className="mt-2 text-sm text-ink/70">
+            Segur que vols eliminar{" "}
+            <strong>{holidayToDelete.name}</strong> ({holidayToDelete.date})?
+            Aquesta acció no es pot desfer.
+          </p>
+          <div className="mt-6 flex justify-end gap-3">
+            <button
+              type="button"
+              onClick={() => setHolidayToDelete(null)}
+              className="rounded-2xl border border-line bg-white px-4 py-2.5 text-sm font-semibold text-ink transition hover:bg-mist"
+            >
+              Cancel·lar
+            </button>
+            <button
+              type="button"
+              onClick={handleDeleteConfirm}
+              className="rounded-2xl bg-danger px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-danger/90"
+            >
+              Sí, eliminar
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
     <Card className="bg-white/90 p-4 shadow-panel">
       <div className="space-y-4">
         <div>
@@ -225,7 +261,7 @@ export function HolidayManager({
                         </div>
                         <button
                           type="button"
-                          onClick={() => handleDelete(holiday.id)}
+                          onClick={() => setHolidayToDelete(holiday)}
                           className="text-xs text-danger hover:underline"
                         >
                           Eliminar
@@ -239,5 +275,6 @@ export function HolidayManager({
         )}
       </div>
     </Card>
+    </>
   );
 }

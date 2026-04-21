@@ -8,6 +8,7 @@ type HistoryPageProps = {
     from?: string | string[];
     to?: string | string[];
     userId?: string | string[];
+    page?: string | string[];
   };
 };
 

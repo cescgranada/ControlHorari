@@ -177,6 +177,18 @@ export async function updateUser(id: string, input: UpdateUserInput) {
   return result;
 }
 
+export async function resetUserPassword(id: string): Promise<{ password: string }> {
+  const admin = createSupabaseAdminClient();
+  const newPassword = generateTemporaryPassword();
+
+  const { error } = await admin.auth.admin.updateUserById(id, {
+    password: newPassword
+  });
+
+  if (error) throw new Error(error.message);
+  return { password: newPassword };
+}
+
 export async function deleteUser(id: string) {
   const supabase = createClient();
 

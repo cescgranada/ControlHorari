@@ -12,6 +12,7 @@ import type {
   HistorySnapshot
 } from "@/types/domain";
 import { AddManualEntryButton } from "./add-manual-entry-button";
+import { HistoryGeoMapButton } from "./history-geo-map-button";
 
 const LocationMap = dynamic(
   () =>
@@ -76,7 +77,11 @@ export function HistoryScreen({
       <Card className="bg-white/90 shadow-panel">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <Badge tone="success">Historial personal</Badge>
+            <Badge tone="success">
+              {isAdmin && selectedUserId
+                ? (users.find((u) => u.id === selectedUserId)?.full_name ?? "Treballador")
+                : "Historial personal"}
+            </Badge>
             <h2 className="mt-4 font-serif text-3xl text-ink">
               Jornades registrades
             </h2>
@@ -138,7 +143,15 @@ export function HistoryScreen({
               Reiniciar
             </Link>
           </form>
-          <div className="flex items-end">
+          <div className="flex items-end gap-2">
+            <HistoryGeoMapButton
+              entries={snapshot.entries}
+              workerName={
+                isAdmin && selectedUserId
+                  ? (users.find((u) => u.id === selectedUserId)?.full_name ?? undefined)
+                  : undefined
+              }
+            />
             <AddManualEntryButton />
           </div>
         </div>
@@ -379,33 +392,43 @@ export function HistoryScreen({
                         <p className="text-sm font-semibold text-ink">
                           Ubicació
                         </p>
-                        <div className="mt-3">
+                        <div className="mt-3 grid gap-4">
                           {entry.clockInLat && entry.clockInLng ? (
-                            <LocationMap
-                              latitude={entry.clockInLat}
-                              longitude={entry.clockInLng}
-                              title="Ubicació d'entrada"
-                            />
-                          ) : entry.clockOutLat && entry.clockOutLng ? (
-                            <LocationMap
-                              latitude={entry.clockOutLat}
-                              longitude={entry.clockOutLng}
-                              title="Ubicació de sortida"
-                            />
+                            <div>
+                              <p className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-ink/50">
+                                Entrada
+                              </p>
+                              <LocationMap
+                                latitude={entry.clockInLat}
+                                longitude={entry.clockInLng}
+                                title="Ubicació d'entrada"
+                              />
+                              <p className="mt-2 text-xs text-ink/60">
+                                {entry.clockInLat.toFixed(6)}, {entry.clockInLng.toFixed(6)}
+                              </p>
+                            </div>
                           ) : null}
-                          <p className="mt-2 text-xs text-ink/60">
-                            {entry.clockInLat && entry.clockInLng
-                              ? `Entrada: ${entry.clockInLat.toFixed(6)}, ${entry.clockInLng.toFixed(6)}`
-                              : entry.clockOutLat && entry.clockOutLng
-                                ? `Sortida: ${entry.clockOutLat.toFixed(6)}, ${entry.clockOutLng.toFixed(6)}`
-                                : ""}
-                          </p>
+                          {entry.clockOutLat && entry.clockOutLng ? (
+                            <div>
+                              <p className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-ink/50">
+                                Sortida
+                              </p>
+                              <LocationMap
+                                latitude={entry.clockOutLat}
+                                longitude={entry.clockOutLng}
+                                title="Ubicació de sortida"
+                              />
+                              <p className="mt-2 text-xs text-ink/60">
+                                {entry.clockOutLat.toFixed(6)}, {entry.clockOutLng.toFixed(6)}
+                              </p>
+                            </div>
+                          ) : null}
                         </div>
                       </div>
                     ) : null}
 
                     {/* Edit button for entries within last 7 days */}
-                    {isWithinLastNDays(entry.clockIn, 7) && (
+                    {entry.status !== "active" && isWithinLastNDays(entry.clockIn, 7) && (
                       <div className="rounded-2xl border border-line/80 px-4 py-4">
                         <p className="text-sm font-semibold text-ink">
                           Accions
@@ -427,6 +450,100 @@ export function HistoryScreen({
           ))}
         </div>
       )}
+
+      {snapshot.pagination.totalPages > 1 && (
+        <Pagination
+          page={snapshot.pagination.page}
+          totalPages={snapshot.pagination.totalPages}
+          totalEntries={snapshot.pagination.totalEntries}
+          pageSize={snapshot.pagination.pageSize}
+          filters={snapshot.filters}
+          selectedUserId={selectedUserId}
+        />
+      )}
+    </div>
+  );
+}
+
+type PaginationProps = {
+  page: number;
+  totalPages: number;
+  totalEntries: number;
+  pageSize: number;
+  filters: HistorySnapshot["filters"];
+  selectedUserId?: string;
+};
+
+function Pagination({ page, totalPages, totalEntries, pageSize, filters, selectedUserId }: PaginationProps) {
+  function buildUrl(targetPage: number) {
+    const params = new URLSearchParams();
+    params.set("from", filters.from);
+    params.set("to", filters.to);
+    if (selectedUserId) params.set("userId", selectedUserId);
+    if (targetPage > 1) params.set("page", String(targetPage));
+    return `/app/historial?${params.toString()}`;
+  }
+
+  const from = (page - 1) * pageSize + 1;
+  const to = Math.min(page * pageSize, totalEntries);
+
+  return (
+    <div className="flex flex-col items-center gap-3 sm:flex-row sm:justify-between">
+      <p className="text-sm text-ink/50">
+        Mostrant {from}–{to} de {totalEntries} entrades
+      </p>
+      <div className="flex items-center gap-1">
+        <Link
+          href={buildUrl(1)}
+          aria-disabled={page === 1}
+          className={`flex h-9 w-9 items-center justify-center rounded-xl border border-line text-sm transition hover:bg-mist ${page === 1 ? "pointer-events-none opacity-30" : ""}`}
+        >
+          «
+        </Link>
+        <Link
+          href={buildUrl(page - 1)}
+          aria-disabled={page === 1}
+          className={`flex h-9 w-9 items-center justify-center rounded-xl border border-line text-sm transition hover:bg-mist ${page === 1 ? "pointer-events-none opacity-30" : ""}`}
+        >
+          ‹
+        </Link>
+
+        {Array.from({ length: totalPages }, (_, i) => i + 1)
+          .filter((p) => p === 1 || p === totalPages || Math.abs(p - page) <= 1)
+          .reduce<(number | "...")[]>((acc, p, i, arr) => {
+            if (i > 0 && p - (arr[i - 1] as number) > 1) acc.push("...");
+            acc.push(p);
+            return acc;
+          }, [])
+          .map((p, i) =>
+            p === "..." ? (
+              <span key={`ellipsis-${i}`} className="flex h-9 w-9 items-center justify-center text-sm text-ink/40">…</span>
+            ) : (
+              <Link
+                key={p}
+                href={buildUrl(p as number)}
+                className={`flex h-9 w-9 items-center justify-center rounded-xl border text-sm font-medium transition ${p === page ? "border-brand bg-brand text-white" : "border-line hover:bg-mist"}`}
+              >
+                {p}
+              </Link>
+            )
+          )}
+
+        <Link
+          href={buildUrl(page + 1)}
+          aria-disabled={page === totalPages}
+          className={`flex h-9 w-9 items-center justify-center rounded-xl border border-line text-sm transition hover:bg-mist ${page === totalPages ? "pointer-events-none opacity-30" : ""}`}
+        >
+          ›
+        </Link>
+        <Link
+          href={buildUrl(totalPages)}
+          aria-disabled={page === totalPages}
+          className={`flex h-9 w-9 items-center justify-center rounded-xl border border-line text-sm transition hover:bg-mist ${page === totalPages ? "pointer-events-none opacity-30" : ""}`}
+        >
+          »
+        </Link>
+      </div>
     </div>
   );
 }
