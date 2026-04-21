@@ -65,24 +65,33 @@ export function ReportsGeoMapButton({ userSnapshots }: ReportsGeoMapButtonProps)
     <>
       <button
         onClick={() => setOpen(true)}
-        className="inline-flex min-h-11 items-center gap-2 rounded-2xl border border-line bg-white px-4 py-2.5 text-sm font-semibold text-ink transition hover:bg-mist"
+        className="flex w-full items-center justify-between overflow-hidden rounded-[1.75rem] border border-brand/20 bg-white/90 px-6 py-5 shadow-panel transition hover:border-brand/40 hover:bg-brand-soft/30"
       >
-        <svg
-          className="h-4 w-4 text-brand"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-          strokeWidth={2}
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"
-          />
-        </svg>
-        Mapa de fitxatges
-        <span className="rounded-full bg-brand/10 px-2 py-0.5 text-xs font-semibold text-brand">
-          {points.length}
+        <div className="flex items-center gap-4">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-brand/10">
+            <svg
+              className="h-5 w-5 text-brand"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2}
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"
+              />
+            </svg>
+          </div>
+          <div className="text-left">
+            <p className="font-semibold text-ink">Mapa de fitxatges</p>
+            <p className="mt-0.5 text-sm text-ink/60">
+              {points.length} punts geolocalitzats en el període seleccionat
+            </p>
+          </div>
+        </div>
+        <span className="rounded-full bg-brand px-3 py-1 text-sm font-semibold text-white">
+          Obrir mapa
         </span>
       </button>
 

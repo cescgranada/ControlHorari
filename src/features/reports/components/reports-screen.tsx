@@ -517,9 +517,6 @@ export function ReportsScreen({
             >
               PDF
             </Button>
-            {isAdmin && userSnapshots.length > 0 && (
-              <ReportsGeoMapButton userSnapshots={userSnapshots} />
-            )}
             {isAdmin && users.length > 0 && (
               <>
                 <span className="ml-2 text-xs font-semibold uppercase tracking-[0.14em] text-ink/50">
@@ -548,6 +545,10 @@ export function ReportsScreen({
           </div>
         </div>
       </Card>
+
+      {userSnapshots.length > 0 && (
+        <ReportsGeoMapButton userSnapshots={userSnapshots} />
+      )}
 
       {hasUserSnapshots ? (
         <div className="grid gap-8">
